@@ -52,9 +52,14 @@ Evidence:
 
 So exporting multilingual is essentially "run the provided script with a
 different `model_dir`", plus an int8 quantization pass and a parity check.
-**Risks:** `transformers` v5 is required by the configs; the `torch.export`/
-dynamo path and `reference_compile` flag are ModernBERT-specific and must be
-verified; int8 must be accuracy-checked. All are covered by the M1 spike.
+
+**M1 result (confirmed, `tools/export/run.sh`):** the multilingual export works
+with `transformers` 5.17 / torch 2.14 (CPU) and reaches `max |dlogits| = 8.6e-6`
+vs PyTorch. The only wrinkle is the unused `act_probs` branch, whose
+`value_info` breaks ONNX shape inference; pruning it (`prune_act_head.py`,
+ADR-27 C3) fixes quantization. Dynamic int8 did **not** meet ADR-24's ≥ 99%
+agreement on state-less inputs (70% overall, 100% with context), so multilingual
+defaults to fp32 (ADR-28). Peak RSS: fp32 ≈ 2.1 GB, int8 ≈ 0.7 GB.
 
 ## Text capture without OCR
 

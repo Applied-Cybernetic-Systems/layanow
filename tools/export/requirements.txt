@@ -1,0 +1,11 @@
+# Build-time dependencies for exporting a Laya checkpoint to ONNX and
+# quantizing it to dynamic int8 (ADR-9). Never installed or used at runtime.
+#
+# torch is installed separately from the CPU index (see run.sh) to avoid pulling
+# the CUDA wheel.
+transformers==5.17.0
+safetensors==0.8.0
+onnx==1.23.0
+onnxruntime==1.30.0
+onnxscript
+numpy

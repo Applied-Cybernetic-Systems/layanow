@@ -191,3 +191,44 @@ target app.
   threshold.
 - **C7:** the M1 spike includes exporting `multilingual` to ONNX + int8 and
   verifying parity/accuracy.
+
+## ADR-28 — M1 results: multilingual ONNX + quantization (A5/A7)
+**Decision:** Ship the multilingual checkpoint (`convaiinnovations/laya` →
+`multilingual/`, encoder `jhu-clsp/mmBERT-base`) as **fp32 ONNX**; dynamic int8
+stays an opt-in setting. The v1 graph is **logits-only** (the unused `act_probs`
+head is pruned, ADR-27 C3), and special tokens are read from the checkpoint's
+`tokenizer_config.json` instead of being hardcoded (ModernBERT spells them
+`[CLS]`/`[MASK]`, mmBERT `<bos>`/`<mask>`).
+**Evidence** (20 neutral, self-made MCQs; `tools/export/run.sh`):
+- fp32 ↔ PyTorch parity: `max |dlogits| = 8.6e-6`.
+- dynamic int8 vs fp32 top-1 agreement: **100% with context in `state`, 50%
+  state-less, 70% overall** — below ADR-24's ≥ 99%. `per_channel=True` was far
+  worse (27%); MatMul-only 73%.
+- peak RSS (ORT session, debug process): fp32 ≈ 2.1 GB, int8 ≈ 0.7 GB. Both are
+  within ADR-11's ≤ 3 GB budget.
+- A5: `state = {}` default confirmed — passage in `state` 8/8, empty 5/12,
+  question duplicated into `state` 1/12.
+**Why:** int8 is the resource win but misses the accuracy bar under the default
+(empty-state) rendering; ADR-24 already allows the fp32 fallback.
+**Consequence:** multilingual ships fp32 (still within budget); int8 is offered
+for context-heavy inputs. English keeps its published int8 default (not
+re-checked here). Revisit int8 if static/calibrated quantization is added.
+Weights are Convai Innovations' (Apache-2.0); see `bundle::ATTRIBUTION`.
+
+## ADR-29 — Golden rendering/calibration fixtures are committed (E3)
+**Decision:** Commit a small JSON golden fixture
+(`crates/layassist-model/tests/fixtures/render_golden.json`) generated once at
+build time by `tools/golden/gen_render_fixtures.py`. The generator runs the
+reference `rl_common.build_sequence` / `render_options` /
+`confidence_from_probs` against a checkpoint's real tokenizer and records, per
+case, the exact tokenizer inputs, the assembled `input_ids`, and the `[MASK]`
+`marker_pos`. The Rust test (`tests/render_golden.rs`) replays the fixture
+offline: a recorded-call closure stands in for the tokenizer, so neither the
+weights nor `tokenizer.json` ship and CI stays hermetic.
+**Why:** The risk register calls for golden tests against `rl_common.py`, but
+ADR-9 forbids Python at runtime and the bundle is far too large to commit. A
+generated fixture pins the reference behaviour in a few tens of KiB.
+**Consequence:** An intentional rendering/calibration change requires
+regenerating and reviewing the fixture; an accidental divergence fails
+`cargo test`. The generator is a dev-shell tool only (it needs the M1 export or
+a cached tokenizer), never a runtime dependency.

@@ -2,12 +2,27 @@
 //! checkpoint registry.
 //!
 //! The ONNX graph contract and per-checkpoint export steps are documented in
-//! `LAYA.md`. This crate is a skeleton until M2; the types below fix the shape
-//! of the registry and the decision result.
+//! `LAYA.md`. The pieces are:
+//!
+//! - [`bundle`] locates (and optionally downloads) a checkpoint bundle;
+//! - [`render`] is the pure port of Laya's sequence/temperature rendering;
+//! - [`decider::Decider`] loads a bundle and runs a `choice` decision.
+//!
+//! The `ort` session loads the system `libonnxruntime` through
+//! `ORT_DYLIB_PATH` (set by the Nix dev shell via the `load-dynamic` feature).
 
 #![cfg_attr(test, allow(clippy::unwrap_used, clippy::expect_used, clippy::panic))]
 
 use std::path::PathBuf;
+
+pub mod bundle;
+mod config;
+pub mod decider;
+pub mod error;
+pub mod render;
+
+pub use decider::Decider;
+pub use error::ModelError;
 
 /// Weight precision of a checkpoint.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

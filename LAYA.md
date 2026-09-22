@@ -33,6 +33,11 @@ Outputs:
 - `logits` `[B,K]` float32 — **uncalibrated**; masked slots `-1e4`
 - `act_probs` `[B,2]` float32
 
+The v1 export **prunes the `act_probs` head** (`tools/export/prune_act_head.py`,
+ADR-27 C3): it is unused, and its `value_info` breaks ONNX shape inference. The
+shipped graph therefore emits `logits` only; `layassist-model` reads just
+`logits`.
+
 `laya_config.json` (next to the graph) holds `max_len`, `head_max_len`,
 `temperature`, `temperature_by_options` for post-hoc calibration.
 
@@ -51,9 +56,14 @@ Sequence layout:
   state, truncated (right by default; left for conversation prefixes).
 - The `[MASK]` token positions become `marker_pos`; valid slots become
   `marker_mask`.
+- Special tokens are read from the checkpoint's `tokenizer_config.json`
+  (`cls_token`/`sep_token`/`mask_token`/`pad_token`), **not** hardcoded:
+  ModernBERT spells them `[CLS]`/`[SEP]`/`[MASK]`/`[PAD]`, mmBERT `<bos>`/
+  `<eos>`/`<mask>`/`<pad>` (`tokenizers` does not parse that file, so
+  `layassist-model` reads it and falls back to the `[CLS]` spellings).
 
-For our MCQ use: `state = {question text}` (or extra context),
-`q["ins"] = question`, `crit = {answer_label: answer_text}`.
+For our MCQ use: `state = {}` (empty, per ADR-23) unless the user supplies
+extra context, `q["ins"] = question`, `crit = {answer_label: answer_text}`.
 
 ### Rendering mapping (A5 — decided)
 
@@ -66,8 +76,31 @@ Chosen (ADR-23), closest to Laya's Jev-style training distribution:
 - `state` = empty `{}` by default; or the question / any extra context the user
   selected.
 
-Keep this behind config and confirm by evaluation in M1. Alternatives considered:
-text-as-label `{ans0: "", …}`, and duplicating the question into `state`.
+**M1 evaluation (multilingual, 20 neutral self-made MCQs):** with a short
+passage in `state` the fp32 model was 8/8 correct; with empty `state`
+(state-less trivia) 5/12; with the question duplicated into `state` 1/12.
+So keep `state = {}` as the default and put any selected context into `state`
+— do not duplicate the question. Alternatives considered: text-as-label
+`{ans0: "", …}`, and duplicating the question into `state`.
+
+### Golden tests (M2)
+
+`render.rs` is a port, not a re-derivation: it must match `rl_common.py`
+byte-for-byte. `tools/golden/gen_render_fixtures.py` (dev-shell only) runs the
+reference `build_sequence` / `render_options` / `confidence_from_probs` against a
+checkpoint's real tokenizer and writes
+`crates/layassist-model/tests/fixtures/render_golden.json`. The committed fixture
+records the exact tokenizer inputs, assembled `input_ids`, `marker_pos`, and the
+calibration/confidence values; `tests/render_golden.rs` replays it offline
+(ADR-29). Regenerate after an intentional change:
+
+```sh
+nix develop
+source target/m1-venv/bin/activate   # or any env with transformers
+tools/golden/gen_render_fixtures.py \
+  --tokenizer target/m1-export/onnx-multilingual/tokenizer \
+  --rl-common target/m1-export/multilingual/rl_common.py
+```
 
 ## Quantization policy (A7 — decided)
 
@@ -80,10 +113,20 @@ Acceptance: int8 vs fp32 top-1 agreement ≥ 99% and small JS/KL divergence on a
 sample of real inputs; if a labelled sample exists, top-1 accuracy within
 ~1–2 points of fp32.
 
+**M1 result (multilingual).** fp32↔PyTorch parity: `max |dlogits| = 8.6e-6`.
+Dynamic int8 (default settings) vs fp32 top-1 agreement was **100% on
+context-bearing inputs but 50% on state-less inputs (70% overall)** — below the
+≥ 99% bar. `per_channel=True` was much worse (27%); MatMul-only 73%. Peak RSS
+(ORT session, debug process): fp32 ≈ 2.1 GB, int8 ≈ 0.7 GB. **Therefore the
+multilingual checkpoint defaults to fp32** (ADR-28), with int8 an opt-in
+setting; English int8 is the published artifact and is unchanged.
+
 ## Calibration & confidence
 
 - Apply temperature scaling from `laya_config.json` (`temperature` per qtype,
   and `temperature_by_options` keyed by cardinality bucket) before reporting.
+  The multilingual checkpoint ships `temperature = [1, 1, 1]` and no buckets,
+  i.e. no calibration; English has fitted values (e.g. `choice:3-5` = 1.76).
 - Confidence = Jev-style `1 - normalized_entropy(p)`, matching the reference
   `confidence_from_probs`.
 - The `act` head (`act_probs`) is available but unused for v1.
@@ -95,25 +138,36 @@ sample of real inputs; if a labelled sample exists, top-1 accuracy within
 Alternative: `Mattepiu/laya-onnx` (includes `laya_int8.onnx`).
 
 ### Exporting a checkpoint yourself (multilingual / typed-decisions)
-Build-time only; Python + torch never shipped.
+Build-time only; Python + torch never shipped. Driven by
+`tools/export/run.sh` inside the dev shell (which provides Python 3.12 + `uv`):
 
-1. Fetch the checkpoint subfolder (`multilingual/` or `typed-decisions/`) plus
-   the repo-root `rl_common.py` (the export script imports it).
-2. Environment with `torch`, `transformers>=5`, `safetensors`, `onnx`,
-   `onnxruntime`.
-3. Run the MIT export script:
-   ```sh
-   python export_onnx.py <checkpoint_dir> <out_dir>
-   ```
-   It writes `laya.onnx`, copies `tokenizer/`, and writes `laya_config.json`,
-   then prints a parity check (`max |dlogits|`).
-4. Quantize to int8 (`onnxruntime.quantization.quantize_dynamic`), then verify
-   accuracy did not regress.
-5. Drop the result into the model registry directory.
+```sh
+nix develop
+tools/export/run.sh                                # multilingual
+LAYASSIST_M1_SUBFOLDER=typed-decisions tools/export/run.sh
+```
 
-Feasibility: **low difficulty** — the head is encoder-agnostic and mmBERT is a
-`modernbert`-family model, the same architecture the English export already
-targets. See `FEASIBILITY.md` for evidence and risks.
+The script:
+
+1. fetches the checkpoint subfolder (`multilingual/` or `typed-decisions/`),
+   the repo-root `rl_common.py`, and the MIT `export/export_onnx.py`;
+2. creates a venv (`requirements.txt`: `transformers>=5`, `safetensors`, `onnx`,
+   `onnxruntime`, `onnxscript`; torch CPU wheels) and runs the export script,
+   which writes `laya.onnx`, copies `tokenizer/`, writes `laya_config.json`, and
+   prints the parity check (`max |dlogits|`);
+3. prunes the unused `act_probs` head (`prune_act_head.py`, above);
+4. quantizes to dynamic int8 (`quantize.py`, `per_channel=False`);
+5. verifies int8 vs fp32 (`verify.py`).
+
+Artifacts land in `$LAYASSIST_M1_DIR` (default `target/m1-export/`, gitignored).
+Load them in Rust with
+`layassist_model::bundle::checkpoint_from_dir("laya-multilingual", dir, Quant::Fp32)`
+and `examples/multilingual_spike.rs`.
+
+Feasibility: **confirmed** — the head is encoder-agnostic and mmBERT is a
+`modernbert`-family model. Multilingual exports cleanly (parity 8.6e-6). The
+only friction is the unused act branch, handled by pruning. See `FEASIBILITY.md`
+for numbers and `DECISIONS.md` ADR-28.
 
 ## Model registry (`layassist-model`)
 

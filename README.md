@@ -16,7 +16,10 @@ hotkey ─▶ egui overlay ─▶ drag over the question, then each answer ─�
 
 ## Status
 
-Planning / scaffolding. See `PLAN.md`.
+M0–M2 complete: the `layassist-model` crate acquires/verifies the ONNX bundle,
+loads a checkpoint through `ort`, ports Laya's rendering/calibration, and
+replays committed golden fixtures against the `rl_common.py` reference. Next:
+the click-through overlay and item model (M3). See `PLAN.md`.
 
 ## Documentation
 
@@ -59,6 +62,34 @@ cargo run -p layassist-app          # starts the tray applet, loads the model
 
 Hotkey: on Wayland/MangoWC a compositor bind runs `layassist toggle` (Wayland
 has no app-level global hotkeys). On Windows/macOS the applet registers it.
+
+## Model smoke test (M0)
+
+The `layassist-model` crate loads a Laya ONNX bundle and runs one `choice`
+decision. The bundle (~1.7 GB, fp32 English checkpoint) is **not** bundled: on
+first run it is downloaded into the XDG cache
+(`~/.cache/layassist/models/receptron--laya-onnx/`). Downloading is opt-in and
+every file is verified against the repository manifest (SHA-256 / git-object
+SHA-1) before it is accepted (ADR-17). The weights are © Convai Innovations
+(Apache-2.0); the example prints the attribution.
+
+```sh
+nix develop
+# first run only: fetch the bundle
+LAYASSIST_ALLOW_MODEL_DOWNLOAD=1 cargo run -p layassist-model --example smoke
+# later runs reuse the cache
+cargo run -p layassist-model --example smoke
+```
+
+The same end-to-end check is an ignored test:
+
+```sh
+cargo test -p layassist-model --test smoke -- --ignored
+```
+
+Overrides: `LAYASSIST_MODEL_CACHE` (cache root), `LAYASSIST_INTRA_OP_THREADS`
+(ORT CPU thread cap). The graph requires `ORT_DYLIB_PATH`, which the dev shell
+sets.
 
 ## Non-goals (v1)
 
