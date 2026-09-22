@@ -31,6 +31,10 @@ use crate::results::{self, DEFAULT_CONFIDENCE_THRESHOLD, Results};
 use crate::theme;
 use crate::worker::{Response, Worker};
 
+/// Left inset for the results block so it does not sit flush against the screen
+/// edge.
+const RESULTS_LEFT_MARGIN: f32 = 160.0;
+
 /// The overlay's current phase.
 #[derive(Debug)]
 enum Phase {
@@ -276,14 +280,29 @@ impl Overlay {
                     theme::shadowed_text(ui, "Deciding…", theme::FG1, theme::BODY_SIZE);
                 }
                 Phase::Results(panel) => {
-                    Self::draw_results(ui, panel);
-                    ui.add_space(8.0);
-                    theme::shadowed_text(
-                        ui,
-                        "click: dismiss · Esc: hide",
-                        theme::FG4,
-                        theme::BODY_SIZE,
-                    );
+                    let question = self.session.question_text().map(str::to_string);
+                    ui.horizontal(|ui| {
+                        ui.add_space(RESULTS_LEFT_MARGIN);
+                        ui.vertical(|ui| {
+                            if let Some(question) = &question {
+                                theme::shadowed_text(
+                                    ui,
+                                    &format!("Question: {question}"),
+                                    theme::BLUE,
+                                    theme::BODY_SIZE,
+                                );
+                                ui.add_space(6.0);
+                            }
+                            Self::draw_results(ui, panel);
+                            ui.add_space(8.0);
+                            theme::shadowed_text(
+                                ui,
+                                "click: dismiss · Esc: hide",
+                                theme::FG4,
+                                theme::BODY_SIZE,
+                            );
+                        });
+                    });
                 }
                 Phase::Error(error) => {
                     theme::shadowed_text(
