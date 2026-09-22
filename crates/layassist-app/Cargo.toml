@@ -1,0 +1,19 @@
+[package]
+name = "layassist-app"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[[bin]]
+name = "layassist"
+path = "src/main.rs"
+
+[dependencies]
+layassist-core = { path = "../layassist-core" }
+layassist-model = { path = "../layassist-model" }
+layassist-platform = { path = "../layassist-platform" }
+layassist-resolvers = { path = "../layassist-resolvers" }
+
+[lints]
+workspace = true

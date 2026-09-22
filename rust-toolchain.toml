@@ -1,0 +1,7 @@
+# Reproducible Rust toolchain for rustup users.
+# On NixOS the toolchain comes from `flake.nix` (nix develop); this file is
+# ignored there and only matters for contributors using rustup.
+[toolchain]
+channel = "stable"
+components = ["rustfmt", "clippy", "rust-analyzer"]
+profile = "minimal"

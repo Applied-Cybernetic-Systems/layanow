@@ -1,0 +1,23 @@
+name: ci
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  quality:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: DeterminateSystems/nix-installer-action@main
+      - uses: DeterminateSystems/magic-nix-cache-action@main
+      - name: rustfmt
+        run: nix develop --command cargo fmt --all -- --check
+      - name: clippy
+        run: nix develop --command cargo clippy --all-targets --all-features -- -D warnings
+      - name: test
+        run: nix develop --command cargo test --workspace
+      - name: docs
+        run: nix develop --command cargo doc --workspace --no-deps
+      - name: deny
+        run: nix develop --command cargo deny check
