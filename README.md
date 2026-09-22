@@ -27,10 +27,18 @@ each answer, then `Enter` to decide. Typing an item into the field and pressing
 and never touches the clipboard (ADR-5). The X11 and Windows/macOS backends
 remain.
 
+M5 in progress: the applet is now **resident** and starts **hidden** (ADR-34).
+Run it once, then a compositor bind (or `layassist toggle`) shows the overlay;
+`Esc` hides it and `layassist quit` stops the applet. The control channel is a
+cross-platform local socket (Unix domain socket / Windows named pipe) that also
+enforces a single instance. The tray and settings are next.
+
 ```sh
 nix develop
-cargo run -p layassist-app     # click-through layer-shell overlay
-# highlight text (or type), Tab to add · Enter to decide · Esc to cancel/quit
+cargo run -p layassist-app            # resident applet; overlay starts hidden
+# in another terminal, or a compositor bind:
+cargo run -p layassist-app -- toggle  # show/hide · also: show, hide, quit
+# highlight text (or type), Tab to add · Enter to decide · Esc: hide
 ```
 
 ## Documentation

@@ -321,3 +321,41 @@ auto-capture (observing selection changes through the overlay surface's own
 `wl_data_device`) remains future work, as do the X11/Windows/macOS backends. A
 blocking pipe read happens on the UI thread when `Tab` is pressed; moving it to
 a worker is deferred until a backend can stall.
+
+## ADR-34 — M5 control channel: cross-platform local socket; hidden-by-default overlay
+**Decision:** The resident applet is controlled through a small local-socket
+protocol. `layassist` with no arguments runs the applet;
+`layassist toggle|show|hide|quit` connect to it and send one newline-terminated
+command. The transport is `interprocess`'s `local_socket`: a Unix domain socket
+under `$XDG_RUNTIME_DIR` on Unix and a named pipe on Windows. The same socket is
+the single-instance lock (T-153): the first applet binds it, a later applet
+notices a live owner and exits, and a stale Unix socket file left by a crash is
+reclaimed. The command type and parsing live in `layassist-platform::control`;
+the listener runs on a dedicated thread and forwards commands over an `mpsc`
+channel to the app.
+
+The overlay now starts **hidden**: no buffer is attached and the layer
+surface uses `KeyboardInteractivity::None` with an empty input region.
+`OverlayApp` gains `poll()` (process non-frame events on every host tick, even
+while hidden) and `visible()`. On show the host maps the surface and switches to
+`KeyboardInteractivity::Exclusive`; on hide it detaches the buffer and returns
+to `None`, so the keyboard is never grabbed while the applet is hidden. `Esc`
+now **hides** the overlay (revising ADR-33's "quits when nothing is captured");
+quitting is `layassist quit` (the tray in T-111 will add a direct control).
+
+**Why:** D-Bus is Linux-only and would force a second Windows mechanism; TCP has
+a firewall/port surface. A user-scoped UDS/named pipe is the OS-native local
+control primitive, needs no heavyweight dependency, and collapses `toggle` and
+single-instance onto one object. Starting hidden and gating keyboard
+interactivity fixes the "can't type while the applet runs" behaviour without
+giving up the click-through overlay (ADR-14).
+
+**Consequence / open:** The command path is verified end-to-end (start →
+single-instance → `quit`) and the Wayland hide/show mapping is compiled, but the
+visual show/hide against a live compositor is not yet exercised. Process exit
+does not run the control thread's destructor, so the applet unlinks the socket
+on a clean exit (`control::cleanup`) and `bind` reclaims a stale file otherwise.
+A decision that is in flight when the overlay is hidden has its late reply
+dropped so stale results cannot reappear; a fully general cancellation token is
+deferred. The tray and settings (T-111/T-113+) attach to the same command
+stream.

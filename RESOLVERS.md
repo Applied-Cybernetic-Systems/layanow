@@ -67,7 +67,7 @@ The overlay is click-through, so it does not see mouse events.
   Reading PRIMARY (the highlight buffer) never touches the regular clipboard
   (ADR-5) and works with the windowless data-control protocols.
 - **Keyboard:** the overlay holds **keyboard interactivity** (Wayland layer-shell
-  keyboard mode) so `Tab` (capture), `Enter` (decide) and `Esc` (cancel) are
+  keyboard mode) so `Tab` (capture), `Enter` (decide) and `Esc` (hide) are
   delivered while the pointer passes through to the target app.
 - **Auto-capture (future):** observing selection changes via the overlay
   surface's own `wl_data_device` (rather than data-control) would remove the

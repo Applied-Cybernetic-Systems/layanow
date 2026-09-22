@@ -72,7 +72,9 @@ pub fn run(app: impl OverlayApp + 'static) -> Result<(), OverlayError> {
     let layer =
         layer_shell.create_layer_surface(&qh, surface, Layer::Overlay, Some("layassist"), None);
     layer.set_anchor(Anchor::TOP | Anchor::BOTTOM | Anchor::LEFT | Anchor::RIGHT);
-    layer.set_keyboard_interactivity(KeyboardInteractivity::Exclusive);
+    // Start hidden and without keyboard interactivity; `apply_visibility`
+    // switches it on only while the overlay is shown (ADR-34).
+    layer.set_keyboard_interactivity(KeyboardInteractivity::None);
     layer.set_exclusive_zone(-1);
     layer.set_size(0, 0);
     layer.commit();
@@ -101,6 +103,7 @@ pub fn run(app: impl OverlayApp + 'static) -> Result<(), OverlayError> {
         // Start as if captured so the first frame installs the empty input
         // region (click-through, ADR-14).
         pointer_captured: true,
+        visible: false,
         width: 0,
         height: 0,
         gl: None,
@@ -114,10 +117,20 @@ pub fn run(app: impl OverlayApp + 'static) -> Result<(), OverlayError> {
             .dispatch_pending(&mut host)
             .map_err(|error| OverlayError::Wayland(error.to_string()))?;
 
+        // Control commands are handled every tick, even while hidden, and the
+        // app's visibility is mirrored onto the surface (ADR-34).
+        host.app.poll();
+        host.apply_visibility();
+        host.apply_input_region()?;
+
         if host.exit || host.app.should_exit() {
             break;
         }
-        if host.dirty.swap(false, Ordering::Relaxed) && host.width > 0 && host.height > 0 {
+        if host.app.visible()
+            && host.dirty.swap(false, Ordering::Relaxed)
+            && host.width > 0
+            && host.height > 0
+        {
             host.render()?;
         }
 
@@ -168,6 +181,7 @@ struct Host {
     modifiers: egui::Modifiers,
     dirty: Arc<AtomicBool>,
     pointer_captured: bool,
+    visible: bool,
     width: u32,
     height: u32,
     gl: Option<Gl>,
@@ -259,13 +273,34 @@ impl Host {
                 .map_err(|error| OverlayError::Gl(error.to_string()))?;
         }
 
-        self.apply_input_region()?;
         Ok(())
+    }
+
+    /// Mirror [`OverlayApp::visible`] onto the layer surface: the keyboard is
+    /// grabbed (and the surface mapped) only while shown (ADR-34).
+    fn apply_visibility(&mut self) {
+        let visible = self.app.visible();
+        if visible == self.visible {
+            return;
+        }
+        self.visible = visible;
+        self.layer.set_keyboard_interactivity(if visible {
+            KeyboardInteractivity::Exclusive
+        } else {
+            KeyboardInteractivity::None
+        });
+        if !visible {
+            // Detach the buffer so the last frame does not linger on screen.
+            self.layer.attach(None, 0, 0);
+        }
+        self.layer.wl_surface().commit();
+        self.dirty.store(true, Ordering::Relaxed);
     }
 
     /// Mirror [`OverlayApp::wants_pointer`] onto the surface's input region.
     fn apply_input_region(&mut self) -> Result<(), OverlayError> {
-        let wants = self.app.wants_pointer();
+        // A hidden overlay never captures the pointer (ADR-34).
+        let wants = self.app.visible() && self.app.wants_pointer();
         if wants == self.pointer_captured {
             return Ok(());
         }

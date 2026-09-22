@@ -27,9 +27,7 @@ agents must update it whenever work is started, finished, or newly discovered.
 - **T-100** · 2026-09-22 · M4 · platform — X11 selection backend reading PRIMARY via `x11rb`. Deferred by user decision 2026-09-22; Wayland is the only backend for now. (ADR-21, `RESOLVERS.md`)
 
 ### M5 — tray, settings, toggle
-- **T-110** · 2026-09-22 · M5 · app — Implement `layassist toggle` (IPC/socket or dbus) so the resident applet can be shown/hidden. (ADR-6/19, `README.md`)
 - **T-111** · 2026-09-22 · M5 · app — Tray icon via `tray-icon`, with show/hide, settings, and quit. (ADR-20)
-- **T-112** · 2026-09-22 · M5 · app — Make the overlay **hidden by default** and stop grabbing the keyboard unless it is shown (`KeyboardInteractivity::Exclusive` only while visible); fixes "can't type while the app runs". (ADR-26/31)
 - **T-113** · 2026-09-22 · M5 · app — Checkpoint selector in settings (manual, no auto-routing). (ADR-7/27-C1)
 - **T-114** · 2026-09-22 · M5 · app — int8/fp32 setting; make `Quant` actually select the graph file instead of being metadata. (ADR-7/11/28)
 - **T-115** · 2026-09-22 · M5 · app — Confidence threshold setting (default 0.5; warn only, never refuse). (ADR-27-C2)
@@ -53,6 +51,7 @@ agents must update it whenever work is started, finished, or newly discovered.
 - **T-135** · 2026-09-22 · platform — Accessibility resolver (AT-SPI / UIA / AX) for clipboard-free reads and region resolution. (M9, ADR-3/13)
 - **T-136** · 2026-09-22 · platform — OCR resolver for non-selectable text. (M10, ADR-3)
 - **T-137** · 2026-09-22 · resolve — Decide the fallback for apps that never publish PRIMARY (e.g. Zed): accessibility, OCR, or opt-in copy-with-save/restore; document the shortlist. (`README.md` "# Text capture")
+- **T-169** · 2026-09-22 · platform — Harden the control socket when `XDG_RUNTIME_DIR` is unset: `socket_path` falls back to `std::env::temp_dir()`, so ensure the socket is mode 0600 or refuse a shared directory. (ADR-34, `crates/layassist-platform/src/control.rs`)
 
 ### Core & data model
 - **T-159** · 2026-09-22 · core — `Selection.bounds`/`Rect` are currently unused; wire them when the a11y/OCR resolvers land, or drop them if no resolver will populate them. (`RESOLVERS.md`)
@@ -65,12 +64,13 @@ agents must update it whenever work is started, finished, or newly discovered.
 - **T-143** · 2026-09-22 · app — Logging via `tracing` (targets, verbosity); replace ad-hoc `eprintln!`/`LAYASSIST_DEBUG`. (E4)
 - **T-144** · 2026-09-22 · ui — Localization decision (UI English-only in v1?). (E10)
 - **T-166** · 2026-09-22 · overlay — Don't dim the whole screen: paint the translucent backdrop only behind the UI panel (question/answer list, field, hints) instead of filling the entire layer surface, and keep every other region fully transparent (and click-through). (`crates/layassist-app/src/overlay.rs`, `theme::OVERLAY_BG`)
+- **T-167** · 2026-09-22 · app — Add a per-decision request id/cancellation token so a decision that finishes after a hide/show cannot be consumed as a newer one; the current stale-reply guard only drops replies while the overlay is not in the `Running` phase. (ADR-34, `crates/layassist-app/src/worker.rs`)
+- **T-168** · 2026-09-22 · app — Verify the live Wayland show/hide end-to-end (surface maps + keyboard grab on `show`, buffer detached + grab released on `hide`); the command path is covered but the visual mapping is not. (ADR-34, T-112)
 
 ### Build, CI & packaging
 - **T-150** · 2026-09-22 · ci — Add `cargo audit` to CI (listed in `PLAN.md`, not currently run). (E2)
 - **T-151** · 2026-09-22 · ci — Align doc linting with `PLAN.md`: `RUSTDOCFLAGS=-D warnings` and/or set `missing_docs = "deny"` (currently `warn`).
 - **T-152** · 2026-09-22 · build — Remove dead dev-shell entries: `vulkan-loader` and the `WGPU_BACKEND` export (wgpu/eframe dropped in ADR-31).
-- **T-153** · 2026-09-22 · pkg — Enforce a single applet instance. (D4)
 - **T-154** · 2026-09-22 · pkg — Autostart at login (systemd user unit / xdg autostart). (D3)
 - **T-155** · 2026-09-22 · pkg — Distribution/packaging (Nix package for Linux; Windows/macOS later). (D2)
 - **T-156** · 2026-09-22 · pkg — Update mechanism / model version pinning decision. (D5)
@@ -107,3 +107,6 @@ _(empty — pick a task from **Open** and move its line here when you start it.)
 - **T-028** · 2026-09-22 · docs — No documentation of the highlight-buffer requirement or diagnostics. **Closed:** added a "Text capture" section to `README.md` (`wl-paste -p`, `read_primary`, `LAYASSIST_DEBUG`).
 - **T-161** · 2026-09-22 · build — The platform selection module (`src/selection*`) and `examples/read_primary.rs` are untracked; stage/commit them with the ADR-33 change. **Closed:** 2026-09-22 · already tracked and committed in `122612a`; verified with `git ls-files` on a clean tree.
 - **T-132** · 2026-09-22 · core — Add `Source::Manual` so typed items carry provenance instead of being recorded as `Source::Selection`. **Closed:** 2026-09-22 · added the `Source::Manual` variant; `Overlay::capture_item` now tags typed items `Manual` while highlights stay `Selection`, with tests for both provenances; shipped in the `feat(core): record typed items as Source::Manual (T-132)` commit.
+- **T-110** · 2026-09-22 · M5 · app — Implement `layassist toggle` (IPC/socket or dbus) so the resident applet can be shown/hidden. (ADR-6/19, `README.md`) **Closed:** 2026-09-22 · cross-platform `interprocess` local socket (Unix UDS / Windows named pipe) + `toggle|show|hide|quit` commands, listener thread forwarding over `mpsc`; shipped in the `feat(app): resident control socket and hidden-by-default overlay (T-110/T-112/T-153)` commit (ADR-34).
+- **T-112** · 2026-09-22 · M5 · app — Make the overlay **hidden by default** and stop grabbing the keyboard unless it is shown (`KeyboardInteractivity::Exclusive` only while visible); fixes "can't type while the app runs". (ADR-26/31) **Closed:** 2026-09-22 · overlay starts hidden (no buffer, `KeyboardInteractivity::None`); `OverlayApp::visible` maps to Exclusive + a fresh buffer on show and detaches the buffer on hide; `Esc` now hides. Shipped in the same commit.
+- **T-153** · 2026-09-22 · pkg — Enforce a single applet instance. (D4) **Closed:** 2026-09-22 · the control socket is the single-instance lock: bind rejects a live owner and reclaims a stale Unix socket; verified end-to-end (second invocation prints "already running" and exits 0). Shipped in the same commit.

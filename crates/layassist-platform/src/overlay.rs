@@ -8,9 +8,12 @@
 //! `layassist-app`.
 //!
 //! The layer surface is anchored to every edge (fullscreen), sits on the
-//! `Overlay` layer, and takes exclusive keyboard interactivity (ADR-26) while
-//! its input region is empty, so the pointer passes through to the application
-//! underneath (ADR-14). When
+//! `Overlay` layer, and starts **hidden**: no buffer is attached and keyboard
+//! interactivity is `None`, so it never grabs the keyboard until it is shown
+//! (ADR-34). While hidden the input region stays empty, so the pointer passes
+//! through to the application underneath (ADR-14). When
+//! [`OverlayApp::visible`](crate::overlay::OverlayApp::visible) becomes true the
+//! surface is mapped and takes exclusive keyboard interactivity (ADR-26); when
 //! [`OverlayApp::wants_pointer`](crate::overlay::OverlayApp::wants_pointer) is
 //! true the input region is restored so a click can dismiss the results
 //! (ADR-15).
@@ -21,6 +24,18 @@ use egui::Context;
 pub trait OverlayApp {
     /// Called once before the first frame, e.g. to install a theme.
     fn configure(&mut self, _ctx: &Context) {}
+
+    /// Process events that are not tied to a rendered frame, e.g. control
+    /// commands from the applet socket (ADR-34). Called on every host tick,
+    /// whether or not the overlay is visible. The default does nothing.
+    fn poll(&mut self) {}
+
+    /// Whether the overlay is currently shown. While `false` the host keeps the
+    /// surface unrendered, click-through, and without keyboard interactivity
+    /// (ADR-34). Defaults to `true` for hosts that do not implement a toggle.
+    fn visible(&self) -> bool {
+        true
+    }
 
     /// Draw one frame.
     fn update(&mut self, ctx: &Context);

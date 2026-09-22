@@ -1,12 +1,16 @@
 //! The full-screen overlay: capture items, run a decision, show results.
 //!
-//! Per ADR-14/25 the layer is transparent and **click-through** (the pointer
-//! passes to the app underneath) while it keeps **keyboard interactivity**
-//! (ADR-26). Items are captured on **`Tab`**: the field text if the user typed
-//! something, otherwise the current native **PRIMARY** highlight. The first
-//! item is the question, every later one an answer (ADR-33). `Enter` decides,
-//! `Esc` cancels (or quits when nothing is captured), and a click dismisses the
-//! results (ADR-15).
+//! The overlay starts **hidden** and the applet is resident (ADR-34):
+//! `layassist toggle` shows or hides it through the control socket
+//! ([`layassist_platform::control`]), and it only takes keyboard interactivity
+//! (ADR-26) while shown. Hiding clears the session.
+//!
+//! While shown the layer is transparent and **click-through** (the pointer
+//! passes to the app underneath, ADR-14/25). Items are captured on **`Tab`**:
+//! the field text if the user typed something, otherwise the current native
+//! **PRIMARY** highlight. The first item is the question, every later one an
+//! answer (ADR-33). `Enter` decides, `Esc` hides the overlay, and a click
+//! dismisses the results (ADR-15).
 //!
 //! The windowing/host (a Wayland layer-shell surface) lives in
 //! `layassist-platform` (ADR-20); this type only draws widgets and holds the
@@ -16,7 +20,10 @@
 //! [`TextResolver`](layassist_resolvers::TextResolver) supplied by the platform
 //! (`layassist_platform::selection`).
 
+use std::sync::mpsc::Receiver;
+
 use layassist_core::{Selection, Session, Source};
+use layassist_platform::control::Command;
 use layassist_platform::overlay::OverlayApp;
 use layassist_resolvers::TextResolver;
 
@@ -42,28 +49,37 @@ pub struct Overlay {
     session: Session,
     resolver: Box<dyn TextResolver>,
     worker: Worker,
+    commands: Receiver<Command>,
     phase: Phase,
     threshold: f32,
     /// A short user-facing hint (e.g. "no selection") drawn while capturing.
     status: Option<String>,
     /// Freely typed item text, captured when `Tab` is pressed.
     entry: String,
+    /// Whether the overlay is shown; starts hidden (ADR-34).
+    visible: bool,
     exit: bool,
 }
 
 impl Overlay {
-    /// Create the overlay driving `worker` and reading selections from
-    /// `resolver`.
+    /// Create the overlay driving `worker`, reading selections from `resolver`,
+    /// and handling control commands from `commands`.
     #[must_use]
-    pub fn new(worker: Worker, resolver: Box<dyn TextResolver>) -> Self {
+    pub fn new(
+        worker: Worker,
+        resolver: Box<dyn TextResolver>,
+        commands: Receiver<Command>,
+    ) -> Self {
         Self {
             session: Session::new(),
             resolver,
             worker,
+            commands,
             phase: Phase::Capturing,
             threshold: DEFAULT_CONFIDENCE_THRESHOLD,
             status: None,
             entry: String::new(),
+            visible: false,
             exit: false,
         }
     }
@@ -145,8 +161,15 @@ impl Overlay {
     }
 
     /// Take the worker's reply, if any.
-    fn poll(&mut self) {
-        if let Some(response) = self.worker.try_recv() {
+    ///
+    /// Replies that arrive after the session was dismissed (e.g. while the
+    /// overlay was hidden mid-decision) are dropped, so stale results cannot
+    /// reappear.
+    fn poll_worker(&mut self) {
+        while let Some(response) = self.worker.try_recv() {
+            if !matches!(self.phase, Phase::Running) {
+                continue;
+            }
             self.phase = match response {
                 Response::Ranked(ranked) => {
                     Phase::Results(Box::new(results::results(&ranked, self.threshold)))
@@ -162,6 +185,18 @@ impl Overlay {
         self.session.clear();
         self.status = None;
         self.entry.clear();
+    }
+
+    /// Show or hide the overlay, clearing the session on any change.
+    ///
+    /// A hidden applet must not retain captured text, and each showing starts
+    /// fresh (ADR-34).
+    fn set_visible(&mut self, visible: bool) {
+        if self.visible == visible {
+            return;
+        }
+        self.visible = visible;
+        self.dismiss();
     }
 
     fn draw_results(ui: &mut egui::Ui, panel: &Results) {
@@ -219,7 +254,7 @@ impl Overlay {
         }
         theme::shadowed_text(
             ui,
-            "Tab: add · Enter: decide · Esc: cancel/quit",
+            "Tab: add · Enter: decide · Esc: hide",
             theme::FG4,
             theme::BODY_SIZE,
         );
@@ -243,7 +278,12 @@ impl Overlay {
                 Phase::Results(panel) => {
                     Self::draw_results(ui, panel);
                     ui.add_space(8.0);
-                    theme::shadowed_text(ui, "click or Esc: dismiss", theme::FG4, theme::BODY_SIZE);
+                    theme::shadowed_text(
+                        ui,
+                        "click: dismiss · Esc: hide",
+                        theme::FG4,
+                        theme::BODY_SIZE,
+                    );
                 }
                 Phase::Error(error) => {
                     theme::shadowed_text(
@@ -252,7 +292,7 @@ impl Overlay {
                         theme::RED,
                         theme::BODY_SIZE,
                     );
-                    theme::shadowed_text(ui, "Esc: dismiss", theme::FG4, theme::BODY_SIZE);
+                    theme::shadowed_text(ui, "Esc: hide", theme::FG4, theme::BODY_SIZE);
                 }
             }
         });
@@ -264,8 +304,23 @@ impl OverlayApp for Overlay {
         theme::install(ctx);
     }
 
+    fn poll(&mut self) {
+        while let Ok(command) = self.commands.try_recv() {
+            match command {
+                Command::Toggle => self.set_visible(!self.visible),
+                Command::Show => self.set_visible(true),
+                Command::Hide => self.set_visible(false),
+                Command::Quit => self.exit = true,
+            }
+        }
+    }
+
+    fn visible(&self) -> bool {
+        self.visible
+    }
+
     fn update(&mut self, ctx: &egui::Context) {
-        self.poll();
+        self.poll_worker();
 
         if matches!(self.phase, Phase::Capturing) {
             if ctx.input_mut(|input| input.consume_key(egui::Modifiers::NONE, egui::Key::Tab)) {
@@ -276,12 +331,9 @@ impl OverlayApp for Overlay {
             }
         }
         if ctx.input(|input| input.key_pressed(egui::Key::Escape)) {
-            // `Esc` on an empty session quits the applet; otherwise it cancels.
-            if matches!(self.phase, Phase::Capturing) && self.session.is_empty() {
-                self.exit = true;
-            } else {
-                self.dismiss();
-            }
+            // The applet is resident: `Esc` hides the overlay instead of
+            // quitting (quit through `layassist quit`, or the tray later).
+            self.set_visible(false);
         }
         if matches!(self.phase, Phase::Results(_)) && ctx.input(|input| input.pointer.any_click()) {
             self.dismiss();
@@ -304,6 +356,7 @@ impl OverlayApp for Overlay {
 
 #[cfg(test)]
 mod tests {
+    use std::sync::mpsc;
     use std::sync::{Arc, Mutex};
 
     use super::*;
@@ -369,18 +422,65 @@ mod tests {
 
     fn overlay_with(engine: impl DecisionEngine) -> (Overlay, TestResolver) {
         let resolver = TestResolver::default();
-        let overlay = Overlay::new(Worker::spawn(engine), Box::new(resolver.clone()));
+        let (_commands_tx, commands) = mpsc::channel();
+        let overlay = Overlay::new(Worker::spawn(engine), Box::new(resolver.clone()), commands);
         (overlay, resolver)
+    }
+
+    /// An overlay controlled through its command channel.
+    fn controlled() -> (Overlay, mpsc::Sender<Command>) {
+        let (tx, rx) = mpsc::channel();
+        let overlay = Overlay::new(Worker::spawn(FirstWins), Box::new(TestResolver::default()), rx);
+        (overlay, tx)
     }
 
     fn overlay() -> (Overlay, TestResolver) {
         overlay_with(FirstWins)
     }
 
+    #[test]
+    fn overlay_starts_hidden() {
+        let (overlay, _commands) = controlled();
+        assert!(!overlay.visible());
+    }
+
+    #[test]
+    fn toggle_command_flips_visibility() {
+        let (mut overlay, commands) = controlled();
+        commands.send(Command::Toggle).expect("send");
+        overlay.poll();
+        assert!(overlay.visible());
+        commands.send(Command::Toggle).expect("send");
+        overlay.poll();
+        assert!(!overlay.visible());
+    }
+
+    #[test]
+    fn quit_command_requests_exit() {
+        let (mut overlay, commands) = controlled();
+        commands.send(Command::Quit).expect("send");
+        overlay.poll();
+        assert!(overlay.exit);
+    }
+
+    #[test]
+    fn hiding_clears_the_session() {
+        let (mut overlay, commands) = controlled();
+        overlay.entry = "Which planet?".to_string();
+        overlay.capture_item();
+        commands.send(Command::Show).expect("send");
+        overlay.poll();
+        assert!(overlay.visible());
+        commands.send(Command::Hide).expect("send");
+        overlay.poll();
+        assert!(!overlay.visible());
+        assert!(overlay.session.is_empty());
+    }
+
     /// Poll until the worker replies, mirroring the per-frame `update` loop.
     fn wait_for_reply(overlay: &mut Overlay) {
         for _ in 0..1000 {
-            overlay.poll();
+            overlay.poll_worker();
             if !matches!(overlay.phase, Phase::Running) {
                 return;
             }
