@@ -1,0 +1,23 @@
+[package]
+name = "layanow-app"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[[bin]]
+name = "layanow"
+path = "src/main.rs"
+
+[dependencies]
+layanow-core = { path = "../layanow-core" }
+layanow-model = { path = "../layanow-model" }
+layanow-platform = { path = "../layanow-platform" }
+layanow-resolvers = { path = "../layanow-resolvers" }
+# egui types for the overlay UI. The windowing/host lives in `layanow-platform`
+# (Wayland layer-shell on Linux, ADR-20); only the widget code lives here.
+egui = { version = "0.32", default-features = false, features = ["default_fonts"] }
+
+[lints]
+workspace = true

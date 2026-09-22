@@ -1,6 +1,6 @@
 # TODO
 
-Granular, issue-style work log for `layassist`. This is the **living** task list:
+Granular, issue-style work log for `layanow`. This is the **living** task list:
 agents must update it whenever work is started, finished, or newly discovered.
 
 ## How to use this file
@@ -33,7 +33,7 @@ agents must update it whenever work is started, finished, or newly discovered.
 - **T-115** · 2026-09-22 · M5 · app — Confidence threshold setting (default 0.5; warn only, never refuse). (ADR-27-C2)
 - **T-116** · 2026-09-22 · M5 · app — Probability colour settings.
 - **T-117** · 2026-09-22 · M5 · app — Hot vs on-demand model unload setting. (ADR-11)
-- **T-118** · 2026-09-22 · M5 · app — Persist settings to `~/.config/layassist/config.toml` (taplo is in the dev shell). (E5, `OPEN-QUESTIONS.md`)
+- **T-118** · 2026-09-22 · M5 · app — Persist settings to `~/.config/layanow/config.toml` (taplo is in the dev shell). (E5, `OPEN-QUESTIONS.md`)
 
 ### Model
 - **T-120** · 2026-09-22 · model — Resolve the English default mismatch: ADR-16/`PLAN.md`/`AGENTS.md` say int8, but the shipped `receptron/laya-onnx` bundle is **fp32** (`Quant::Fp32`). Either wire an English int8 artifact and make `Quant` functional, or amend ADR-16. **Needs a decision.**
@@ -51,7 +51,7 @@ agents must update it whenever work is started, finished, or newly discovered.
 - **T-135** · 2026-09-22 · platform — Accessibility resolver (AT-SPI / UIA / AX) for clipboard-free reads and region resolution. (M9, ADR-3/13)
 - **T-136** · 2026-09-22 · platform — OCR resolver for non-selectable text. (M10, ADR-3)
 - **T-137** · 2026-09-22 · resolve — Decide the fallback for apps that never publish PRIMARY (e.g. Zed): accessibility, OCR, or opt-in copy-with-save/restore; document the shortlist. (`README.md` "# Text capture")
-- **T-169** · 2026-09-22 · platform — Harden the control socket when `XDG_RUNTIME_DIR` is unset: `socket_path` falls back to `std::env::temp_dir()`, so ensure the socket is mode 0600 or refuse a shared directory. (ADR-34, `crates/layassist-platform/src/control.rs`)
+- **T-169** · 2026-09-22 · platform — Harden the control socket when `XDG_RUNTIME_DIR` is unset: `socket_path` falls back to `std::env::temp_dir()`, so ensure the socket is mode 0600 or refuse a shared directory. (ADR-34, `crates/layanow-platform/src/control.rs`)
 
 ### Core & data model
 - **T-159** · 2026-09-22 · core — `Selection.bounds`/`Rect` are currently unused; wire them when the a11y/OCR resolvers land, or drop them if no resolver will populate them. (`RESOLVERS.md`)
@@ -61,10 +61,10 @@ agents must update it whenever work is started, finished, or newly discovered.
 - **T-140** · 2026-09-22 · app — Error popup per ADR-18 (currently errors render inline in the overlay). (ADR-18, M6)
 - **T-141** · 2026-09-22 · app — Add a regression test/guarantee that neither PRIMARY reads nor any fallback ever modifies the clipboard. (ADR-5, M6)
 - **T-142** · 2026-09-22 · app — Decide and implement history/privacy (local decision log? retention?). (E6)
-- **T-143** · 2026-09-22 · app — Logging via `tracing` (targets, verbosity); replace ad-hoc `eprintln!`/`LAYASSIST_DEBUG`. (E4)
+- **T-143** · 2026-09-22 · app — Logging via `tracing` (targets, verbosity); replace ad-hoc `eprintln!`/`LAYANOW_DEBUG`. (E4)
 - **T-144** · 2026-09-22 · ui — Localization decision (UI English-only in v1?). (E10)
-- **T-166** · 2026-09-22 · overlay — Don't dim the whole screen: paint the translucent backdrop only behind the UI panel (question/answer list, field, hints) instead of filling the entire layer surface, and keep every other region fully transparent (and click-through). (`crates/layassist-app/src/overlay.rs`, `theme::OVERLAY_BG`)
-- **T-167** · 2026-09-22 · app — Add a per-decision request id/cancellation token so a decision that finishes after a hide/show cannot be consumed as a newer one; the current stale-reply guard only drops replies while the overlay is not in the `Running` phase. (ADR-34, `crates/layassist-app/src/worker.rs`)
+- **T-166** · 2026-09-22 · overlay — Don't dim the whole screen: paint the translucent backdrop only behind the UI panel (question/answer list, field, hints) instead of filling the entire layer surface, and keep every other region fully transparent (and click-through). (`crates/layanow-app/src/overlay.rs`, `theme::OVERLAY_BG`)
+- **T-167** · 2026-09-22 · app — Add a per-decision request id/cancellation token so a decision that finishes after a hide/show cannot be consumed as a newer one; the current stale-reply guard only drops replies while the overlay is not in the `Running` phase. (ADR-34, `crates/layanow-app/src/worker.rs`)
 - **T-168** · 2026-09-22 · app — Verify the live Wayland show/hide end-to-end (surface maps + keyboard grab on `show`, buffer detached + grab released on `hide`); the command path is covered but the visual mapping is not. (ADR-34, T-112)
 
 ### Build, CI & packaging
@@ -93,7 +93,7 @@ _(empty — pick a task from **Open** and move its line here when you start it.)
 - **T-002** · 2026-09-22 · docs — Remove stale/superseded docs and dead code; introduce `TODO.md` and document it in `AGENTS.md`/`README.md`. **Closed:** 2026-09-22 · shipped in the same commit.
 - **T-010** · 2026-09-22 · M0 · build — Rust workspace, Nix dev shell, CI quality gate, and the `ort` smoke test. **Closed:** done (M0).
 - **T-011** · 2026-09-22 · M1 · model — Export spike: multilingual → ONNX + dynamic int8; parity and accuracy measured. **Closed:** done; int8 missed ADR-24 for multilingual → fp32 default (ADR-28).
-- **T-012** · 2026-09-22 · M2 · model — `layassist-model`: tokenizer, rendering/calibration port, golden fixtures. **Closed:** done (ADR-29).
+- **T-012** · 2026-09-22 · M2 · model — `layanow-model`: tokenizer, rendering/calibration port, golden fixtures. **Closed:** done (ADR-29).
 - **T-013** · 2026-09-22 · M3 · app — Click-through Wayland layer-shell overlay, `Session` model, inference worker, results panel. **Closed:** done (ADR-30/31).
 - **T-014** · 2026-09-22 · M3 · docs — Auto-capture on selection change (ADR-26). **Closed:** not needed for v1 (user decision 2026-09-22); manual `Tab` capture (ADR-33) stands.
 - **T-020** · 2026-09-22 · platform — Dead, misleading `accessibility_available()` stub claiming M4. **Closed:** removed.
@@ -104,9 +104,10 @@ _(empty — pick a task from **Open** and move its line here when you start it.)
 - **T-025** · 2026-09-22 · docs — `RESOLVERS.md` interface omitted the `ResolveError` type. **Closed:** fixed.
 - **T-026** · 2026-09-22 · docs — `OPEN-QUESTIONS.md` E8 (MSRV/edition) listed as deferred though decided. **Closed:** moved to resolved.
 - **T-027** · 2026-09-22 · build — `deny.toml` allowed `MPL-2.0`, which no dependency uses (warning). **Closed:** allowance removed.
-- **T-028** · 2026-09-22 · docs — No documentation of the highlight-buffer requirement or diagnostics. **Closed:** added a "Text capture" section to `README.md` (`wl-paste -p`, `read_primary`, `LAYASSIST_DEBUG`).
+- **T-028** · 2026-09-22 · docs — No documentation of the highlight-buffer requirement or diagnostics. **Closed:** added a "Text capture" section to `README.md` (`wl-paste -p`, `read_primary`, `LAYANOW_DEBUG`).
 - **T-161** · 2026-09-22 · build — The platform selection module (`src/selection*`) and `examples/read_primary.rs` are untracked; stage/commit them with the ADR-33 change. **Closed:** 2026-09-22 · already tracked and committed in `122612a`; verified with `git ls-files` on a clean tree.
 - **T-132** · 2026-09-22 · core — Add `Source::Manual` so typed items carry provenance instead of being recorded as `Source::Selection`. **Closed:** 2026-09-22 · added the `Source::Manual` variant; `Overlay::capture_item` now tags typed items `Manual` while highlights stay `Selection`, with tests for both provenances; shipped in the `feat(core): record typed items as Source::Manual (T-132)` commit.
-- **T-110** · 2026-09-22 · M5 · app — Implement `layassist toggle` (IPC/socket or dbus) so the resident applet can be shown/hidden. (ADR-6/19, `README.md`) **Closed:** 2026-09-22 · cross-platform `interprocess` local socket (Unix UDS / Windows named pipe) + `toggle|show|hide|quit` commands, listener thread forwarding over `mpsc`; shipped in the `feat(app): resident control socket and hidden-by-default overlay (T-110/T-112/T-153)` commit (ADR-34).
+- **T-110** · 2026-09-22 · M5 · app — Implement `layanow toggle` (IPC/socket or dbus) so the resident applet can be shown/hidden. (ADR-6/19, `README.md`) **Closed:** 2026-09-22 · cross-platform `interprocess` local socket (Unix UDS / Windows named pipe) + `toggle|show|hide|quit` commands, listener thread forwarding over `mpsc`; shipped in the `feat(app): resident control socket and hidden-by-default overlay (T-110/T-112/T-153)` commit (ADR-34).
 - **T-112** · 2026-09-22 · M5 · app — Make the overlay **hidden by default** and stop grabbing the keyboard unless it is shown (`KeyboardInteractivity::Exclusive` only while visible); fixes "can't type while the app runs". (ADR-26/31) **Closed:** 2026-09-22 · overlay starts hidden (no buffer, `KeyboardInteractivity::None`); `OverlayApp::visible` maps to Exclusive + a fresh buffer on show and detaches the buffer on hide; `Esc` now hides. Shipped in the same commit.
 - **T-153** · 2026-09-22 · pkg — Enforce a single applet instance. (D4) **Closed:** 2026-09-22 · the control socket is the single-instance lock: bind rejects a live owner and reclaims a stale Unix socket; verified end-to-end (second invocation prints "already running" and exits 0). Shipped in the same commit.
+- **T-170** · 2026-09-22 · docs — Rename the project from `layassist` to `layanow` (crate/package/binary names, `LAYASSIST_*` env vars, `~/.cache/layanow`, socket id, all docs, GitHub repo). **Closed:** 2026-09-22 · renamed the five crates, the binary, the env vars, the cache/socket paths and every doc reference; moved the user's `layanow.png` into `crates/layanow-platform/assets/`; migrated `~/.cache/layassist` → `~/.cache/layanow`; GitHub repo renamed to `Uiyx/layanow`.

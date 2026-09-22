@@ -1,5 +1,5 @@
 {
-  description = "layassist — Rust dev environment";
+  description = "layanow — Rust dev environment";
 
   # Pinned to the same nixpkgs revision as the user's system flake
   # (~/projects/nix/flake.lock) so the toolchain matches the host.
@@ -13,7 +13,7 @@
 
       # Start the AT-SPI accessibility bus if it is not already reachable.
       # The `accessibility` resolver depends on it (atspi crate / D-Bus).
-      layassist-atspi = pkgs.writeShellScriptBin "layassist-atspi" ''
+      layanow-atspi = pkgs.writeShellScriptBin "layanow-atspi" ''
         set -euo pipefail
         probe() {
           ${pkgs.dbus}/bin/dbus-send --session --print-reply \
@@ -82,7 +82,7 @@
           jq
           curl
           git
-          layassist-atspi
+          layanow-atspi
         ];
 
         shellHook = ''
@@ -107,12 +107,12 @@
           # Make the AT-SPI bus service discoverable and ensure it is running.
           export XDG_DATA_DIRS="${pkgs.at-spi2-core}/share:''${XDG_DATA_DIRS:-/usr/local/share:/usr/share}"
           unset NO_AT_BRIDGE
-          layassist-atspi || true
+          layanow-atspi || true
 
-          echo "layassist dev shell (Rust)"
+          echo "layanow dev shell (Rust)"
           echo "  rustc : $(rustc --version)"
           echo "  ort   : $ORT_DYLIB_PATH"
-          echo "  helper: layassist-atspi   # (re)start the accessibility bus"
+          echo "  helper: layanow-atspi   # (re)start the accessibility bus"
         '';
       };
     };

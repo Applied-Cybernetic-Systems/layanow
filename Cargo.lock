@@ -816,25 +816,25 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e2db585e1d738fc771bf08a151420d3ed193d9d895a36df7f6f8a9456b911ddc"
 
 [[package]]
-name = "layassist-app"
+name = "layanow-app"
 version = "0.1.0"
 dependencies = [
  "egui",
- "layassist-core",
- "layassist-model",
- "layassist-platform",
- "layassist-resolvers",
+ "layanow-core",
+ "layanow-model",
+ "layanow-platform",
+ "layanow-resolvers",
 ]
 
 [[package]]
-name = "layassist-core"
+name = "layanow-core"
 version = "0.1.0"
 
 [[package]]
-name = "layassist-model"
+name = "layanow-model"
 version = "0.1.0"
 dependencies = [
- "layassist-core",
+ "layanow-core",
  "ort",
  "serde",
  "serde_json",
@@ -846,7 +846,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "layassist-platform"
+name = "layanow-platform"
 version = "0.1.0"
 dependencies = [
  "egui",
@@ -854,8 +854,8 @@ dependencies = [
  "glow",
  "glutin",
  "interprocess",
- "layassist-core",
- "layassist-resolvers",
+ "layanow-core",
+ "layanow-resolvers",
  "libc",
  "raw-window-handle",
  "smithay-client-toolkit",
@@ -865,10 +865,10 @@ dependencies = [
 ]
 
 [[package]]
-name = "layassist-resolvers"
+name = "layanow-resolvers"
 version = "0.1.0"
 dependencies = [
- "layassist-core",
+ "layanow-core",
 ]
 
 [[package]]

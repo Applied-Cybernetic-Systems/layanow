@@ -22,7 +22,7 @@ Decisions live in `DECISIONS.md` as ADRs. This file tracks what is still open.
 | B3 | X11 support | Wayland + X11 (ADR-21) |
 | C1–C7 | Model defaults | See ADR-27 |
 | D1 | v1 platform | Linux; order Linux → Windows → macOS |
-| E1 | Git | `github.com/Uiyx/layassist` (private) (ADR-22) |
+| E1 | Git | `github.com/Uiyx/layanow` (private) (ADR-22) |
 | E3 | Testing fixtures | **Commit generated golden fixtures** for the rendering/calibration port; replay offline (ADR-29) |
 | E8 | MSRV/edition | **Rust 1.85 / edition 2024** (pinned in `Cargo.toml`/`rust-toolchain.toml`) |
 
@@ -34,7 +34,7 @@ Decisions live in `DECISIONS.md` as ADRs. This file tracks what is still open.
 - [ ] **D5. Updates** — update mechanism, or manual? Model version pinning.
 - [ ] **E2. CI** — keep the Nix-based GitHub Actions workflow as-is?
 - [ ] **E4. Logging** — `tracing` target/location/verbosity.
-- [ ] **E5. Config** — TOML at `~/.config/layassist/config.toml`; which keys in v1?
+- [ ] **E5. Config** — TOML at `~/.config/layanow/config.toml`; which keys in v1?
 - [ ] **E6. History/privacy** — keep a local decision log? Retention?
 - [ ] **E7. Lint strictness** — keep `clippy::pedantic` warn + CI `-D warnings`?
 - [ ] **E9. Telemetry** — none (assumed).

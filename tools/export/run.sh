@@ -4,21 +4,21 @@
 #
 #   nix develop
 #   tools/export/run.sh                 # multilingual (default)
-#   LAYASSIST_M1_SUBFOLDER=typed-decisions tools/export/run.sh
+#   LAYANOW_M1_SUBFOLDER=typed-decisions tools/export/run.sh
 #
 # Steps: fetch the PyTorch checkpoint + rl_common.py + the MIT export script,
 # export fp32 ONNX, prune the unused act head (v1), quantize to dynamic int8,
 # then compare int8 against fp32 (ADR-24). Python is build-time only (ADR-9).
 #
-# Artifacts land in $LAYASSIST_M1_DIR (default target/m1-export), which is
+# Artifacts land in $LAYANOW_M1_DIR (default target/m1-export), which is
 # gitignored.
 
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-WORK="${LAYASSIST_M1_DIR:-$REPO_ROOT/target/m1-export}"
+WORK="${LAYANOW_M1_DIR:-$REPO_ROOT/target/m1-export}"
 VENV="$REPO_ROOT/target/m1-venv"
-SUBFOLDER="${LAYASSIST_M1_SUBFOLDER:-multilingual}"
+SUBFOLDER="${LAYANOW_M1_SUBFOLDER:-multilingual}"
 MODEL_DIR="$WORK/$SUBFOLDER"
 ONNX_DIR="$WORK/onnx-$SUBFOLDER"
 HF="https://huggingface.co/convaiinnovations/laya/resolve/main"

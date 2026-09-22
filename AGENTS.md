@@ -4,7 +4,7 @@ Guidance for agents (and humans) working in this repository.
 
 ## What this is
 
-`layassist` is a cross-platform desktop **tray applet** (Rust). The user
+`layanow` is a cross-platform desktop **tray applet** (Rust). The user
 highlights a question and its candidate answers as **native text** (no OCR), and
 the applet asks a local **Laya** typed-decision model (via **ONNX Runtime**)
 which answer is correct, then shows a ranked list with probability colours.
@@ -15,11 +15,11 @@ Read `README.md` first, then `PLAN.md` and `DECISIONS.md`. The ADRs are binding.
 
 ```
 crates/
-  layassist-core/       # platform-agnostic types, config, errors (no I/O)
-  layassist-model/      # ONNX session, tokenizer, rendering, calibration, registry
-  layassist-resolvers/  # TextResolver trait + selection/accessibility impls
-  layassist-platform/   # cfg-gated OS backends; the ONLY crate allowed unsafe
-  layassist-app/        # egui UI, tray, hotkey wiring; the `layassist` binary
+  layanow-core/       # platform-agnostic types, config, errors (no I/O)
+  layanow-model/      # ONNX session, tokenizer, rendering, calibration, registry
+  layanow-resolvers/  # TextResolver trait + selection/accessibility impls
+  layanow-platform/   # cfg-gated OS backends; the ONLY crate allowed unsafe
+  layanow-app/        # egui UI, tray, hotkey wiring; the `layanow` binary
 flake.nix               # dev shell (Rust toolchain, onnxruntime, a11y, Wayland)
 ```
 
@@ -42,7 +42,7 @@ Docs: `PLAN.md`, `DECISIONS.md` (ADRs), `FEASIBILITY.md`, `RESOLVERS.md`,
 7. Default resource profile: **hot, int8, CPU-only**, documented soft budget
    **≤ 3 GB** (ADR-11). No runtime enforcement. *(The shipped English bundle is
    currently fp32 — tracked as `TODO.md` T-120.)*
-8. `unsafe` code only in `layassist-platform`, isolated and documented.
+8. `unsafe` code only in `layanow-platform`, isolated and documented.
 
 ## Work tracking (`TODO.md`)
 
@@ -82,8 +82,8 @@ CI (`.github/workflows/ci.yml`) runs exactly these via `nix develop`.
 - **Docs:** public items are documented (`missing_docs` is denied in CI).
 - **Lints:** workspace lints in `Cargo.toml` are authoritative; do not
   `#[allow]` a lint without a comment explaining why.
-- **Platform code:** everything OS-specific goes in `layassist-platform` behind
-  the traits defined in `layassist-resolvers` / `layassist-model`, so the rest
+- **Platform code:** everything OS-specific goes in `layanow-platform` behind
+  the traits defined in `layanow-resolvers` / `layanow-model`, so the rest
   stays portable and safe.
 - **Concurrency:** inference runs on a dedicated worker thread; communicate via
   channels. Prefer message passing over shared mutable state.
@@ -102,8 +102,8 @@ CI (`.github/workflows/ci.yml`) runs exactly these via `nix develop`.
 
 ## Adding a resolver or a checkpoint
 
-- **Resolver:** implement `TextResolver` (in `layassist-resolvers`) with the
-  platform call in `layassist-platform`; register it in the resolution chain.
+- **Resolver:** implement `TextResolver` (in `layanow-resolvers`) with the
+  platform call in `layanow-platform`; register it in the resolution chain.
   Update `RESOLVERS.md`.
 - **Checkpoint:** export + quantize per `LAYA.md`, add a `Checkpoint` entry to
   the registry, and document it. Selection stays a settings toggle.

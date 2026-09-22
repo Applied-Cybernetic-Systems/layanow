@@ -47,7 +47,7 @@ copy is opt-in.
 compositor bind.
 **Why:** Wayland has no app-level global-hotkey protocol, and the
 GlobalShortcuts portal is not implemented by wlroots/`xdpw` (MangoWC).
-**How:** Linux/Wayland → a `mango` bind runs `layassist toggle`. Windows/macOS
+**How:** Linux/Wayland → a `mango` bind runs `layanow toggle`. Windows/macOS
 (later) → the applet registers via `global-hotkey`.
 
 ## ADR-7 — Model selection is a settings toggle
@@ -122,7 +122,7 @@ multilingual checkpoint (and others) through settings (ADR-7).
 ## ADR-17 — Model acquisition: download on first run
 **Decision:** Do not bundle weights. Download the selected checkpoint from
 Hugging Face on first use into an XDG cache
-(`~/.cache/layassist/models/`), verify checksums, and show the Apache-2.0
+(`~/.cache/layanow/models/`), verify checksums, and show the Apache-2.0
 attribution. Allow a user-provided path override in settings.
 **Why:** Best practice for large models; keeps the app small and updatable.
 
@@ -131,7 +131,7 @@ attribution. Allow a user-provided path override in settings.
 popup from the applet rather than failing silently.
 
 ## ADR-19 — Hotkey is user-managed
-**Decision:** The applet documents the hotkey and the `layassist toggle`
+**Decision:** The applet documents the hotkey and the `layanow toggle`
 command, but does **not** modify the compositor config. The user wires the bind
 (e.g. in `~/projects/nix` mango config).
 
@@ -148,8 +148,8 @@ Wayland-only, so a single overlay implementation cannot be cross-platform.
 APIs.
 
 ## ADR-22 — Repository
-**Decision:** Source lives at `github.com/Uiyx/layassist` (private), with a local
-git repo at `~/projects/layassist`.
+**Decision:** Source lives at `github.com/Uiyx/layanow` (private), with a local
+git repo at `~/projects/layanow`.
 
 ## ADR-23 — MCQ → Laya rendering (A5)
 **Decision:** Map an MCQ as `ins` = question text, `crit` = letter-labelled
@@ -217,7 +217,7 @@ Weights are Convai Innovations' (Apache-2.0); see `bundle::ATTRIBUTION`.
 
 ## ADR-29 — Golden rendering/calibration fixtures are committed (E3)
 **Decision:** Commit a small JSON golden fixture
-(`crates/layassist-model/tests/fixtures/render_golden.json`) generated once at
+(`crates/layanow-model/tests/fixtures/render_golden.json`) generated once at
 build time by `tools/golden/gen_render_fixtures.py`. The generator runs the
 reference `rl_common.build_sequence` / `render_options` /
 `confidence_from_probs` against a checkpoint's real tokenizer and records, per
@@ -255,7 +255,7 @@ visually verified; that, and removing the `Tab`-capture stub, is M4 work. The
 
 ## ADR-31 — Wayland overlay is a wlr-layer-shell host (supersedes ADR-30's window)
 **Decision:** Replace the eframe window with a purpose-built Wayland host in
-`layassist-platform` (`overlay::run`). It creates a `wlr-layer-shell` surface
+`layanow-platform` (`overlay::run`). It creates a `wlr-layer-shell` surface
 (`Layer::Overlay`, anchored to every edge, `exclusive_zone = -1`,
 `KeyboardInteractivity::Exclusive`), renders egui through `egui_glow` on an
 EGL/GLES context bound to that surface (`glutin`, with the raw `wl_display` /
@@ -263,7 +263,7 @@ EGL/GLES context bound to that surface (`glutin`, with the raw `wl_display` /
 (`calloop`-free: `libc::poll` on the connection fd with a 16 ms timeout). The
 pointer is **click-through** via an empty `wl_surface` input region (ADR-14),
 switched to the full region only while results are shown so the dismissing click
-is seen (ADR-15). The UI stays in `layassist-app` behind the `OverlayApp` trait.
+is seen (ADR-15). The UI stays in `layanow-app` behind the `OverlayApp` trait.
 `eframe` is dropped from the dependency tree.
 **Why:** `winit`/`eframe` only create `xdg_toplevel` windows, which cannot be
 always-on-top, click-through, *and* keyboard-interactive on Wayland; that
@@ -282,7 +282,7 @@ the `Tab`-to-capture stub still stands in until the M4 selection backends.
 ## ADR-32 — Overlay theme: gruvbox medium contrast, shadowed bright text
 **Decision:** The overlay uses the gruvbox "medium" contrast palette
 (`bg0 = #282828`, `fg0 = #fbf1c7`), installed into egui's visuals by
-`layassist-app::theme`. Primary text is `fg0` (the brightest foreground) and is
+`layanow-app::theme`. Primary text is `fg0` (the brightest foreground) and is
 drawn with a soft drop shadow (black at ~78% opacity, offset 1.5 pt) so it stays
 legible over arbitrary desktop content; question/answer accents are gruvbox
 `blue`/`green`, warnings `yellow`, errors `red`. The probability bars run
@@ -298,7 +298,7 @@ one-file edit.
 ## ADR-33 — M4 capture: `Tab` commits the highlight or a typed item
 **Decision:** The overlay captures items two ways, both committed with **`Tab`**:
 (a) the current Wayland **PRIMARY** selection — the highlight buffer, never the
-regular clipboard — read once through `layassist-platform::selection` (a
+regular clipboard — read once through `layanow-platform::selection` (a
 `TextResolver` over `wl-clipboard-rs`); and (b) the contents of the text field,
 so typing an item remains available as a fallback. If the field is non-empty it
 wins; otherwise the PRIMARY selection is used. The captured text is appended to
@@ -324,13 +324,13 @@ a worker is deferred until a backend can stall.
 
 ## ADR-34 — M5 control channel: cross-platform local socket; hidden-by-default overlay
 **Decision:** The resident applet is controlled through a small local-socket
-protocol. `layassist` with no arguments runs the applet;
-`layassist toggle|show|hide|quit` connect to it and send one newline-terminated
+protocol. `layanow` with no arguments runs the applet;
+`layanow toggle|show|hide|quit` connect to it and send one newline-terminated
 command. The transport is `interprocess`'s `local_socket`: a Unix domain socket
 under `$XDG_RUNTIME_DIR` on Unix and a named pipe on Windows. The same socket is
 the single-instance lock (T-153): the first applet binds it, a later applet
 notices a live owner and exits, and a stale Unix socket file left by a crash is
-reclaimed. The command type and parsing live in `layassist-platform::control`;
+reclaimed. The command type and parsing live in `layanow-platform::control`;
 the listener runs on a dedicated thread and forwards commands over an `mpsc`
 channel to the app.
 
@@ -341,7 +341,7 @@ while hidden) and `visible()`. On show the host maps the surface and switches to
 `KeyboardInteractivity::Exclusive`; on hide it detaches the buffer and returns
 to `None`, so the keyboard is never grabbed while the applet is hidden. `Esc`
 now **hides** the overlay (revising ADR-33's "quits when nothing is captured");
-quitting is `layassist quit` (the tray in T-111 will add a direct control).
+quitting is `layanow quit` (the tray in T-111 will add a direct control).
 
 **Why:** D-Bus is Linux-only and would force a second Windows mechanism; TCP has
 a firewall/port surface. A user-scoped UDS/named pipe is the OS-native local

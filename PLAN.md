@@ -37,15 +37,15 @@ General-purpose ("any text"), with Linux (Wayland + X11) first.
 Rust workspace:
 
 ```
-layassist/
+layanow/
 ├── Cargo.toml                # workspace
 ├── rust-toolchain.toml       # pinned stable
 ├── crates/
-│   ├── layassist-core/       # session model, config, types, error
-│   ├── layassist-model/      # ONNX session, tokenizer, rendering, calibration, registry
-│   ├── layassist-resolvers/  # TextResolver trait + selection backends
-│   ├── layassist-platform/   # cfg-gated: overlay, hotkey, selection backends
-│   └── layassist-app/        # egui UI, tray, hotkey wiring, the binary
+│   ├── layanow-core/       # session model, config, types, error
+│   ├── layanow-model/      # ONNX session, tokenizer, rendering, calibration, registry
+│   ├── layanow-resolvers/  # TextResolver trait + selection backends
+│   ├── layanow-platform/   # cfg-gated: overlay, hotkey, selection backends
+│   └── layanow-app/        # egui UI, tray, hotkey wiring, the binary
 └── flake.nix
 ```
 
@@ -67,7 +67,7 @@ native selection (click-through overlay) ─▶ TextResolver.resolve_current_sel
 - `Cargo.toml` `[workspace.lints]`: `clippy::all` + selected `pedantic`;
   deny `clippy::unwrap_used`, `clippy::expect_used`, `clippy::panic` in library
   crates.
-- `#![forbid(unsafe_code)]` on every crate except `layassist-platform` (FFI),
+- `#![forbid(unsafe_code)]` on every crate except `layanow-platform` (FFI),
   where unsafe is isolated and documented.
 - `cargo fmt --check`, `cargo clippy --all-targets -- -D warnings`,
   `cargo test`, `cargo doc` with `#![deny(missing_docs)]`.
@@ -76,7 +76,7 @@ native selection (click-through overlay) ─▶ TextResolver.resolve_current_sel
 - Golden tests compare tokenizer + rendering output to the reference.
 - ADRs for decisions; small PRs.
 
-## Model layer (`layassist-model`)
+## Model layer (`layanow-model`)
 
 - **ONNX** graph per checkpoint: inputs `input_ids`, `attention_mask`,
   `marker_pos`, `marker_mask`, `qtype` → outputs `logits`, `act_probs`.
@@ -110,10 +110,10 @@ native selection (click-through overlay) ─▶ TextResolver.resolve_current_sel
 |---|---|
 | M0 | Rust workspace + flake + CI quality gate + `ort` smoke test on `receptron/laya-onnx` |
 | M1 | **Export spike** (done): multilingual → ONNX (parity 8.6e-6) + int8; int8 missed ADR-24's bar → multilingual defaults to fp32; RAM fp32 ≈2.1 GB / int8 ≈0.7 GB; A5/A7 settled (ADR-28) |
-| M2 | **`layassist-model`** (done): tokenizer + rendering + calibration port; golden tests vs `rl_common.py` (ADR-29) |
+| M2 | **`layanow-model`** (done): tokenizer + rendering + calibration port; golden tests vs `rl_common.py` (ADR-29) |
 | M3 | **Click-through overlay + item model + results panel** (done): `Session` model, capture stub (replaced by the M4 selection backend), inference worker, results panel, and a Wayland `wlr-layer-shell` overlay rendering egui via EGL/`egui_glow` (ADR-30/31) |
 | M4 | **Linux selection backends** (in progress): Wayland PRIMARY (`wl-clipboard-rs`) with `Tab`-commit capture done (ADR-33); X11 (`x11rb`) pending |
-| M5 | **Control socket + hidden-by-default overlay + `layassist toggle` done (ADR-34)**; tray (`tray-icon`) + settings (checkpoint, confidence, colours, hot/unload) pending |
+| M5 | **Control socket + hidden-by-default overlay + `layanow toggle` done (ADR-34)**; tray (`tray-icon`) + settings (checkpoint, confidence, colours, hot/unload) pending |
 | M6 | Polish: no-clipboard-clobber guarantees, error popup, history, docs |
 | M7 | Windows selection backend · M8 macOS selection backend · M9 accessibility resolver · M10 OCR |
 

@@ -1,0 +1,38 @@
+[package]
+name = "layanow-model"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+layanow-core = { path = "../layanow-core" }
+# ONNX Runtime. `load-dynamic` resolves the system libonnxruntime through
+# `ORT_DYLIB_PATH` (set by the Nix dev shell), so no ORT is vendored. `api-24`
+# targets the onnxruntime 1.24.x provided by the shell.
+ort = { version = "=2.0.0-rc.13", default-features = false, features = [
+    "std",
+    "load-dynamic",
+    "api-24",
+] }
+# The official HuggingFace tokenizer — the same library Laya uses. The English
+# checkpoint is BPE + ByteLevel; `fancy-regex` supplies the pure-Rust regex
+# backend so we do not need the default oniguruma C dependency.
+tokenizers = { version = "0.23.2", default-features = false, features = ["fancy-regex"] }
+serde_json = "1"
+thiserror = "2"
+# First-run model download into the XDG cache (ADR-17). TLS via rustls.
+ureq = "2.12"
+# Integrity of downloaded files: SHA-256 for LFS blobs, git-object SHA-1 for
+# small non-LFS files (ADR-17).
+sha1 = "0.10"
+sha2 = "0.10"
+
+[dev-dependencies]
+# Golden-test fixture parsing (M2); the fixture itself is committed JSON.
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+[lints]
+workspace = true

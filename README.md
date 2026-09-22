@@ -1,4 +1,4 @@
-# layassist
+# layanow
 
 A cross-platform Rust desktop **applet**: highlight a question and its candidate
 answers as native text (no OCR), and it asks a local **Laya** decision model
@@ -16,7 +16,7 @@ hotkey ─▶ egui overlay ─▶ drag over the question, then each answer ─�
 
 ## Status
 
-M0–M2 complete: the `layassist-model` crate acquires/verifies the ONNX bundle,
+M0–M2 complete: the `layanow-model` crate acquires/verifies the ONNX bundle,
 loads a checkpoint through `ort`, ports Laya's rendering/calibration, and
 replays committed golden fixtures against the `rl_common.py` reference.
 
@@ -28,16 +28,16 @@ and never touches the clipboard (ADR-5). The X11 and Windows/macOS backends
 remain.
 
 M5 in progress: the applet is now **resident** and starts **hidden** (ADR-34).
-Run it once, then a compositor bind (or `layassist toggle`) shows the overlay;
-`Esc` hides it and `layassist quit` stops the applet. The control channel is a
+Run it once, then a compositor bind (or `layanow toggle`) shows the overlay;
+`Esc` hides it and `layanow quit` stops the applet. The control channel is a
 cross-platform local socket (Unix domain socket / Windows named pipe) that also
 enforces a single instance. The tray and settings are next.
 
 ```sh
 nix develop
-cargo run -p layassist-app            # resident applet; overlay starts hidden
+cargo run -p layanow-app            # resident applet; overlay starts hidden
 # in another terminal, or a compositor bind:
-cargo run -p layassist-app -- toggle  # show/hide · also: show, hide, quit
+cargo run -p layanow-app -- toggle  # show/hide · also: show, hide, quit
 # highlight text (or type), Tab to add · Enter to decide · Esc: hide
 ```
 
@@ -63,10 +63,10 @@ cargo run -p layassist-app -- toggle  # show/hide · also: show, hide, quit
 - `at-spi2-core` + `dbus` (accessibility), `wl-clipboard`, `wtype`
 - `wayland`, `wayland-protocols`, `libxkbcommon`, `vulkan-loader`, `mesa`, `libGL`
 - `pkg-config`, `cmake`, `openssl`
-- the AT-SPI bus started on shell entry + the `layassist-atspi` helper
+- the AT-SPI bus started on shell entry + the `layanow-atspi` helper
 
 ```sh
-cd ~/projects/layassist
+cd ~/projects/layanow
 nix develop
 cargo build
 ```
@@ -77,11 +77,11 @@ cargo build
 
 ```sh
 nix develop
-cargo run -p layassist-app          # starts the tray applet, loads the model
+cargo run -p layanow-app          # starts the tray applet, loads the model
 # hotkey opens the overlay
 ```
 
-Hotkey: on Wayland/MangoWC a compositor bind runs `layassist toggle` (Wayland
+Hotkey: on Wayland/MangoWC a compositor bind runs `layanow toggle` (Wayland
 has no app-level global hotkeys). On Windows/macOS the applet registers it.
 
 ## Text capture (highlight buffer)
@@ -99,15 +99,15 @@ nix develop -c wl-paste -p     # prints the highlight, or nothing
 ```
 
 The standalone probe is
-`cargo run -p layassist-platform --example read_primary`. Run the applet with
-`LAYASSIST_DEBUG=1` to log capture outcomes (lengths only, never the text).
+`cargo run -p layanow-platform --example read_primary`. Run the applet with
+`LAYANOW_DEBUG=1` to log capture outcomes (lengths only, never the text).
 
 ## Model smoke test (M0)
 
-The `layassist-model` crate loads a Laya ONNX bundle and runs one `choice`
+The `layanow-model` crate loads a Laya ONNX bundle and runs one `choice`
 decision. The bundle (~1.7 GB, fp32 English checkpoint) is **not** bundled: on
 first run it is downloaded into the XDG cache
-(`~/.cache/layassist/models/receptron--laya-onnx/`). Downloading is opt-in and
+(`~/.cache/layanow/models/receptron--laya-onnx/`). Downloading is opt-in and
 every file is verified against the repository manifest (SHA-256 / git-object
 SHA-1) before it is accepted (ADR-17). The weights are © Convai Innovations
 (Apache-2.0); the example prints the attribution.
@@ -115,18 +115,18 @@ SHA-1) before it is accepted (ADR-17). The weights are © Convai Innovations
 ```sh
 nix develop
 # first run only: fetch the bundle
-LAYASSIST_ALLOW_MODEL_DOWNLOAD=1 cargo run -p layassist-model --example smoke
+LAYANOW_ALLOW_MODEL_DOWNLOAD=1 cargo run -p layanow-model --example smoke
 # later runs reuse the cache
-cargo run -p layassist-model --example smoke
+cargo run -p layanow-model --example smoke
 ```
 
 The same end-to-end check is an ignored test:
 
 ```sh
-cargo test -p layassist-model --test smoke -- --ignored
+cargo test -p layanow-model --test smoke -- --ignored
 ```
 
-Overrides: `LAYASSIST_MODEL_CACHE` (cache root), `LAYASSIST_INTRA_OP_THREADS`
+Overrides: `LAYANOW_MODEL_CACHE` (cache root), `LAYANOW_INTRA_OP_THREADS`
 (ORT CPU thread cap). The graph requires `ORT_DYLIB_PATH`, which the dev shell
 sets.
 

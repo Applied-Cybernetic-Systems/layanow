@@ -4,7 +4,7 @@
 The Rust port of Laya's `rl_common.py` (`build_sequence` / `render_options`,
 plus temperature scaling and Jev confidence) must match the reference exactly.
 This script runs the *actual* `rl_common.py` against a checkpoint's real
-tokenizer and writes a small JSON fixture that `crates/layassist-model/tests/
+tokenizer and writes a small JSON fixture that `crates/layanow-model/tests/
 render_golden.rs` replays. Python is build-time only (ADR-9); the fixture is
 committed so the Rust test needs neither Python nor the weights.
 
@@ -13,7 +13,7 @@ Usage (inside `nix develop`, with the M1 export or a cached bundle present):
     tools/golden/gen_render_fixtures.py \
         --tokenizer target/m1-export/onnx-multilingual/tokenizer \
         --rl-common target/m1-export/multilingual/rl_common.py \
-        --out crates/layassist-model/tests/fixtures/render_golden.json
+        --out crates/layanow-model/tests/fixtures/render_golden.json
 
 The tokenizer directory must contain `tokenizer.json` + `tokenizer_config.json`.
 `rl_common.py` is fetched by `tools/export/run.sh` (from the model repo).
@@ -122,7 +122,7 @@ def main() -> int:
     )
     parser.add_argument(
         "--out",
-        default="crates/layassist-model/tests/fixtures/render_golden.json",
+        default="crates/layanow-model/tests/fixtures/render_golden.json",
         help="fixture output path",
     )
     parser.add_argument("--checkpoint", default="laya-multilingual")

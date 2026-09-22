@@ -37,7 +37,7 @@ Outputs:
 
 The v1 export **prunes the `act_probs` head** (`tools/export/prune_act_head.py`,
 ADR-27 C3): it is unused, and its `value_info` breaks ONNX shape inference. The
-shipped graph therefore emits `logits` only; `layassist-model` reads just
+shipped graph therefore emits `logits` only; `layanow-model` reads just
 `logits`.
 
 `laya_config.json` (next to the graph) holds `max_len`, `head_max_len`,
@@ -62,7 +62,7 @@ Sequence layout:
   (`cls_token`/`sep_token`/`mask_token`/`pad_token`), **not** hardcoded:
   ModernBERT spells them `[CLS]`/`[SEP]`/`[MASK]`/`[PAD]`, mmBERT `<bos>`/
   `<eos>`/`<mask>`/`<pad>` (`tokenizers` does not parse that file, so
-  `layassist-model` reads it and falls back to the `[CLS]` spellings).
+  `layanow-model` reads it and falls back to the `[CLS]` spellings).
 
 For our MCQ use: `state = {}` (empty, per ADR-23) unless the user supplies
 extra context, `q["ins"] = question`, `crit = {answer_label: answer_text}`.
@@ -91,7 +91,7 @@ So keep `state = {}` as the default and put any selected context into `state`
 byte-for-byte. `tools/golden/gen_render_fixtures.py` (dev-shell only) runs the
 reference `build_sequence` / `render_options` / `confidence_from_probs` against a
 checkpoint's real tokenizer and writes
-`crates/layassist-model/tests/fixtures/render_golden.json`. The committed fixture
+`crates/layanow-model/tests/fixtures/render_golden.json`. The committed fixture
 records the exact tokenizer inputs, assembled `input_ids`, `marker_pos`, and the
 calibration/confidence values; `tests/render_golden.rs` replays it offline
 (ADR-29). Regenerate after an intentional change:
@@ -148,7 +148,7 @@ Build-time only; Python + torch never shipped. Driven by
 ```sh
 nix develop
 tools/export/run.sh                                # multilingual
-LAYASSIST_M1_SUBFOLDER=typed-decisions tools/export/run.sh
+LAYANOW_M1_SUBFOLDER=typed-decisions tools/export/run.sh
 ```
 
 The script:
@@ -163,9 +163,9 @@ The script:
 4. quantizes to dynamic int8 (`quantize.py`, `per_channel=False`);
 5. verifies int8 vs fp32 (`verify.py`).
 
-Artifacts land in `$LAYASSIST_M1_DIR` (default `target/m1-export/`, gitignored).
+Artifacts land in `$LAYANOW_M1_DIR` (default `target/m1-export/`, gitignored).
 Load them in Rust with
-`layassist_model::bundle::checkpoint_from_dir("laya-multilingual", dir, Quant::Fp32)`
+`layanow_model::bundle::checkpoint_from_dir("laya-multilingual", dir, Quant::Fp32)`
 and `examples/multilingual_spike.rs`.
 
 Feasibility: **confirmed** — the head is encoder-agnostic and mmBERT is a
@@ -173,7 +173,7 @@ Feasibility: **confirmed** — the head is encoder-agnostic and mmBERT is a
 only friction is the unused act branch, handled by pruning. See `FEASIBILITY.md`
 for numbers and `DECISIONS.md` ADR-28.
 
-## Model registry (`layassist-model`)
+## Model registry (`layanow-model`)
 
 ```rust
 struct Checkpoint {

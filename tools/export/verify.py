@@ -126,7 +126,7 @@ def make_batch(tok, cfg, samples):
     items = []
     correct = []
     groups = []
-    variant = os.environ.get("LAYASSIST_A5_VARIANT")
+    variant = os.environ.get("LAYANOW_A5_VARIANT")
     for sample in samples:
         question = sample["q"]
         keys = list(question["crit"])
@@ -178,7 +178,7 @@ def run(session: ort.InferenceSession, batch) -> tuple[np.ndarray, float]:
 
 def main() -> int:
     onnx_dir = os.path.abspath(sys.argv[2])
-    fp32_name = os.environ.get("LAYASSIST_FP32", "laya.onnx")
+    fp32_name = os.environ.get("LAYANOW_FP32", "laya.onnx")
     int8_name = sys.argv[3] if len(sys.argv) > 3 else "laya_int8.onnx"
     with open(os.path.join(onnx_dir, "laya_config.json")) as handle:
         cfg = json.load(handle)
@@ -204,7 +204,7 @@ def main() -> int:
         agree = int(p.argmax() == q.argmax())
         js_total += js_divergence(p, q)
         max_dp = max(max_dp, float(np.abs(p - q).max()))
-        if os.environ.get("LAYASSIST_SHOW_PROBS"):
+        if os.environ.get("LAYANOW_SHOW_PROBS"):
             print(f"sample {row:2d} [{groups[row]:7s}] fp32={np.round(p, 4).tolist()}")
         for group in (groups[row], "ALL"):
             bucket = stats.setdefault(group, [0, 0, 0])
