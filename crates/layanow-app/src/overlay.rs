@@ -20,7 +20,7 @@
 //! [`TextResolver`](layanow_resolvers::TextResolver) supplied by the platform
 //! (`layanow_platform::selection`).
 
-use std::sync::mpsc::Receiver;
+use crossbeam_channel::Receiver;
 
 use layanow_core::{Selection, Session, Source};
 use layanow_platform::control::Command;
@@ -356,7 +356,6 @@ impl OverlayApp for Overlay {
 
 #[cfg(test)]
 mod tests {
-    use std::sync::mpsc;
     use std::sync::{Arc, Mutex};
 
     use super::*;
@@ -422,14 +421,14 @@ mod tests {
 
     fn overlay_with(engine: impl DecisionEngine) -> (Overlay, TestResolver) {
         let resolver = TestResolver::default();
-        let (_commands_tx, commands) = mpsc::channel();
+        let (_commands_tx, commands) = crossbeam_channel::unbounded();
         let overlay = Overlay::new(Worker::spawn(engine), Box::new(resolver.clone()), commands);
         (overlay, resolver)
     }
 
     /// An overlay controlled through its command channel.
-    fn controlled() -> (Overlay, mpsc::Sender<Command>) {
-        let (tx, rx) = mpsc::channel();
+    fn controlled() -> (Overlay, crossbeam_channel::Sender<Command>) {
+        let (tx, rx) = crossbeam_channel::unbounded();
         let overlay = Overlay::new(Worker::spawn(FirstWins), Box::new(TestResolver::default()), rx);
         (overlay, tx)
     }

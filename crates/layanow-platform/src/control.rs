@@ -17,9 +17,9 @@
 //! skips the listener's own name reclamation).
 
 use std::io::{BufRead, BufReader, Write};
-use std::sync::mpsc::{self, Receiver, Sender};
 use std::thread;
 
+use crossbeam_channel::{Receiver, Sender};
 use interprocess::local_socket::{ListenerOptions, Name, prelude::*};
 
 #[cfg(unix)]
@@ -87,14 +87,23 @@ pub enum ControlError {
     InvalidCommand(String),
 }
 
+/// A running control server: the socket listener plus the command channel it
+/// feeds.
+pub struct Control {
+    /// Sender for additional command producers such as the system tray.
+    pub sender: Sender<Command>,
+    /// Receiver the applet drains (handed to the overlay).
+    pub receiver: Receiver<Command>,
+}
+
 /// Start the control server for the default identifier.
 ///
 /// The listener runs on a dedicated thread and forwards commands through the
-/// returned receiver.
+/// returned [`Control::receiver`].
 ///
 /// # Errors
 /// Returns [`ControlError::AlreadyRunning`] if another applet owns the socket.
-pub fn start() -> Result<Receiver<Command>, ControlError> {
+pub fn start() -> Result<Control, ControlError> {
     start_with(DEFAULT_ID)
 }
 
@@ -120,13 +129,14 @@ pub fn cleanup() {
 }
 
 /// Start the control server for `id` (the seam used by tests).
-fn start_with(id: &str) -> Result<Receiver<Command>, ControlError> {
+fn start_with(id: &str) -> Result<Control, ControlError> {
     let listener = bind(id)?;
-    let (tx, rx) = mpsc::channel();
+    let (sender, receiver) = crossbeam_channel::unbounded();
+    let server_sender = sender.clone();
     thread::Builder::new()
         .name("layanow-control".to_string())
-        .spawn(move || serve(&listener, &tx))?;
-    Ok(rx)
+        .spawn(move || serve(&listener, &server_sender))?;
+    Ok(Control { sender, receiver })
 }
 
 /// Send `command` to the applet listening on `id`.
@@ -269,7 +279,7 @@ mod tests {
     fn the_server_forwards_a_command_to_the_receiver() {
         let id = test_id("start");
         let listener = bind(&id).expect("bind");
-        let (tx, rx) = mpsc::channel();
+        let (tx, rx) = crossbeam_channel::unbounded();
         let server = thread::spawn(move || serve(&listener, &tx));
         send_to(&id, Command::Hide).expect("send");
         assert_eq!(rx.recv_timeout(Duration::from_secs(5)).ok(), Some(Command::Hide));

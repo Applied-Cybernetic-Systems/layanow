@@ -18,6 +18,9 @@ layanow-resolvers = { path = "../layanow-resolvers" }
 # egui types for the overlay UI. The windowing/host lives in `layanow-platform`
 # (Wayland layer-shell on Linux, ADR-20); only the widget code lives here.
 egui = { version = "0.32", default-features = false, features = ["default_fonts"] }
+# Cloneable command channel: `control` hands the overlay a `Receiver` and the
+# tray a cloned `Sender`.
+crossbeam-channel = "0.5"
 
 [lints]
 workspace = true

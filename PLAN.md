@@ -113,7 +113,7 @@ native selection (click-through overlay) ─▶ TextResolver.resolve_current_sel
 | M2 | **`layanow-model`** (done): tokenizer + rendering + calibration port; golden tests vs `rl_common.py` (ADR-29) |
 | M3 | **Click-through overlay + item model + results panel** (done): `Session` model, capture stub (replaced by the M4 selection backend), inference worker, results panel, and a Wayland `wlr-layer-shell` overlay rendering egui via EGL/`egui_glow` (ADR-30/31) |
 | M4 | **Linux selection backends** (in progress): Wayland PRIMARY (`wl-clipboard-rs`) with `Tab`-commit capture done (ADR-33); X11 (`x11rb`) pending |
-| M5 | **Control socket + hidden-by-default overlay + `layanow toggle` done (ADR-34)**; tray (`tray-icon`) + settings (checkpoint, confidence, colours, hot/unload) pending |
+| M5 | **Control socket + hidden-by-default overlay + `layanow toggle` + tray icon done (ADR-34/35)**; settings (checkpoint, confidence, colours, hot/unload) pending |
 | M6 | Polish: no-clipboard-clobber guarantees, error popup, history, docs |
 | M7 | Windows selection backend · M8 macOS selection backend · M9 accessibility resolver · M10 OCR |
 

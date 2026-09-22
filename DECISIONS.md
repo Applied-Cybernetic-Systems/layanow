@@ -359,3 +359,26 @@ A decision that is in flight when the overlay is hidden has its late reply
 dropped so stale results cannot reappear; a fully general cancellation token is
 deferred. The tray and settings (T-111/T-113+) attach to the same command
 stream.
+
+## ADR-35 — Tray icon uses `tray-icon`'s `ksni` backend on Linux
+**Decision:** The system tray is `tray-icon` (ADR-20). On Linux it is built
+with `default-features = false, features = ["ksni"]`, so it speaks
+StatusNotifierItem over D-Bus through `ksni`; Windows and macOS use
+`tray-icon`'s native backend. The menu is **Toggle overlay** and **Quit**, and a
+left click toggles; both post to the same `Command` channel as the CLI
+(ADR-34). The `layanow.png` icon (32x32 RGBA) is embedded and decoded with the
+`png` crate. Tray creation is best-effort: a failure is logged and the applet
+keeps running from the CLI.
+
+**Why:** The overlay host is a raw Wayland layer-shell client with no GTK main
+loop; `tray-icon`'s default Linux backend needs `libappindicator` + GTK and a
+GTK event loop, which would add a heavy dependency and a second loop. The
+`ksni` backend runs on its own thread and needs no GTK (verified: the resolved
+tree has no `gtk`/`libappindicator`). waybar provides the StatusNotifierWatcher.
+
+**Consequence:** `cargo-deny`'s `[graph] all-features` is turned off because it
+would enable both mutually-exclusive Linux backends and pull in the unused GTK
+tree (`option-ext`/MPL-2.0, the unmaintained `proc-macro-error`).
+`PredefinedMenuItem::quit` renders disabled under the `ksni` bridge, so Quit is
+an ordinary menu item. The `Settings...` entry is deferred to T-113+, and the
+menu does not yet reflect overlay visibility (T-172).

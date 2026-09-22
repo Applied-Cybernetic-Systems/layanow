@@ -2,9 +2,9 @@
 //!
 //! With no arguments it runs the **resident** applet: the overlay starts hidden
 //! and the control socket listens for `layanow toggle`/`show`/`hide`/`quit`
-//! (ADR-34). The tray, settings, and in-process hotkey land later in M5.
-//! Selection capture uses the platform PRIMARY-selection backend
-//! (`layanow-platform::selection`, M4).
+//! (ADR-34), and a tray icon offers the same actions (ADR-35). The settings and
+//! in-process hotkey land later in M5. Selection capture uses the platform
+//! PRIMARY-selection backend (`layanow-platform::selection`, M4).
 
 #![cfg_attr(test, allow(clippy::unwrap_used, clippy::expect_used, clippy::panic))]
 
@@ -81,17 +81,26 @@ fn print_help() {
 fn run_applet() -> Result<(), Box<dyn std::error::Error>> {
     // Bind the control socket first: it is the single-instance lock (T-153) and
     // makes `layanow toggle` responsive while the model loads.
-    let commands = match control::start() {
-        Ok(commands) => commands,
+    let control = match control::start() {
+        Ok(control) => control,
         Err(ControlError::AlreadyRunning) => {
             eprintln!("layanow: already running");
             return Ok(());
         }
         Err(error) => return Err(error.into()),
     };
+    // Best-effort tray: without a StatusNotifier host the applet still works
+    // from the `layanow` CLI (ADR-35).
+    let _tray = match layanow_platform::tray::start(control.sender.clone()) {
+        Ok(tray) => Some(tray),
+        Err(error) => {
+            eprintln!("layanow: tray unavailable: {error}");
+            None
+        }
+    };
     let worker = load_worker()?;
     let resolver = layanow_platform::selection::resolver();
-    let result = layanow_platform::overlay::run(Overlay::new(worker, resolver, commands));
+    let result = layanow_platform::overlay::run(Overlay::new(worker, resolver, control.receiver));
     // Process exit does not run the control thread's destructor, so unlink the
     // socket explicitly on a clean exit.
     control::cleanup();

@@ -27,7 +27,6 @@ agents must update it whenever work is started, finished, or newly discovered.
 - **T-100** · 2026-09-22 · M4 · platform — X11 selection backend reading PRIMARY via `x11rb`. Deferred by user decision 2026-09-22; Wayland is the only backend for now. (ADR-21, `RESOLVERS.md`)
 
 ### M5 — tray, settings, toggle
-- **T-111** · 2026-09-22 · M5 · app — Tray icon via `tray-icon`, with show/hide, settings, and quit. (ADR-20)
 - **T-113** · 2026-09-22 · M5 · app — Checkpoint selector in settings (manual, no auto-routing). (ADR-7/27-C1)
 - **T-114** · 2026-09-22 · M5 · app — int8/fp32 setting; make `Quant` actually select the graph file instead of being metadata. (ADR-7/11/28)
 - **T-115** · 2026-09-22 · M5 · app — Confidence threshold setting (default 0.5; warn only, never refuse). (ADR-27-C2)
@@ -66,6 +65,8 @@ agents must update it whenever work is started, finished, or newly discovered.
 - **T-166** · 2026-09-22 · overlay — Don't dim the whole screen: paint the translucent backdrop only behind the UI panel (question/answer list, field, hints) instead of filling the entire layer surface, and keep every other region fully transparent (and click-through). (`crates/layanow-app/src/overlay.rs`, `theme::OVERLAY_BG`)
 - **T-167** · 2026-09-22 · app — Add a per-decision request id/cancellation token so a decision that finishes after a hide/show cannot be consumed as a newer one; the current stale-reply guard only drops replies while the overlay is not in the `Running` phase. (ADR-34, `crates/layanow-app/src/worker.rs`)
 - **T-168** · 2026-09-22 · app — Verify the live Wayland show/hide end-to-end (surface maps + keyboard grab on `show`, buffer detached + grab released on `hide`); the command path is covered but the visual mapping is not. (ADR-34, T-112)
+- **T-171** · 2026-09-22 · app — Add a `Settings…` entry to the tray menu once a settings surface exists (T-113+); deferred from T-111. (ADR-35)
+- **T-172** · 2026-09-22 · app — Reflect overlay visibility in the tray menu (checked toggle / dynamic label); needs a visibility→tray channel. (ADR-35)
 
 ### Build, CI & packaging
 - **T-150** · 2026-09-22 · ci — Add `cargo audit` to CI (listed in `PLAN.md`, not currently run). (E2)
@@ -111,3 +112,4 @@ _(empty — pick a task from **Open** and move its line here when you start it.)
 - **T-112** · 2026-09-22 · M5 · app — Make the overlay **hidden by default** and stop grabbing the keyboard unless it is shown (`KeyboardInteractivity::Exclusive` only while visible); fixes "can't type while the app runs". (ADR-26/31) **Closed:** 2026-09-22 · overlay starts hidden (no buffer, `KeyboardInteractivity::None`); `OverlayApp::visible` maps to Exclusive + a fresh buffer on show and detaches the buffer on hide; `Esc` now hides. Shipped in the same commit.
 - **T-153** · 2026-09-22 · pkg — Enforce a single applet instance. (D4) **Closed:** 2026-09-22 · the control socket is the single-instance lock: bind rejects a live owner and reclaims a stale Unix socket; verified end-to-end (second invocation prints "already running" and exits 0). Shipped in the same commit.
 - **T-170** · 2026-09-22 · docs — Rename the project from `layassist` to `layanow` (crate/package/binary names, `LAYASSIST_*` env vars, `~/.cache/layanow`, socket id, all docs, GitHub repo). **Closed:** 2026-09-22 · renamed the five crates, the binary, the env vars, the cache/socket paths and every doc reference; moved the user's `layanow.png` into `crates/layanow-platform/assets/`; migrated `~/.cache/layassist` → `~/.cache/layanow`; GitHub repo renamed to `Uiyx/layanow`.
+- **T-111** · 2026-09-22 · M5 · app — Tray icon via `tray-icon`, with show/hide, settings, and quit. (ADR-20) **Closed:** 2026-09-22 · `layanow-platform::tray` uses `tray-icon` with the Linux `ksni` (StatusNotifierItem, no GTK) backend; menu `Toggle overlay`/`Quit` plus left-click toggle, posting to the shared `Command` channel (now `crossbeam-channel`); embedded 32x32 `layanow.png`; best-effort startup. Verified the SNI registration over D-Bus (`org.kde.StatusNotifierItem-*`) and clean quit. `Settings…` deferred to T-171. Shipped in the `feat(app): system tray with toggle and quit (T-111)` commit (ADR-35).

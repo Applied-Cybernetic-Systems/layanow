@@ -29,9 +29,10 @@ remain.
 
 M5 in progress: the applet is now **resident** and starts **hidden** (ADR-34).
 Run it once, then a compositor bind (or `layanow toggle`) shows the overlay;
-`Esc` hides it and `layanow quit` stops the applet. The control channel is a
+`Esc` hides it and `layanow quit` stops the applet. A **tray icon** (ADR-35)
+offers Toggle/Quit and a left click toggles. The control channel is a
 cross-platform local socket (Unix domain socket / Windows named pipe) that also
-enforces a single instance. The tray and settings are next.
+enforces a single instance. Settings are next.
 
 ```sh
 nix develop

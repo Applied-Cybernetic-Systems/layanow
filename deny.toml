@@ -1,5 +1,9 @@
 [graph]
-all-features = true
+# Do not force all features. `tray-icon` has two mutually exclusive Linux
+# backends (`libappindicator`+GTK and `ksni`); enabling both pulls in the
+# unused GTK tree (`option-ext` MPL-2.0, the unmaintained `proc-macro-error`).
+# We select `ksni` explicitly, so the resolved graph is the real one.
+all-features = false
 targets = [
     "x86_64-unknown-linux-gnu",
     "x86_64-pc-windows-msvc",
@@ -33,6 +37,8 @@ allow = [
     # BSD Zero Clause: `recvmsg` and `doctest-file` (via `interprocess`, the
     # applet control socket).
     "0BSD",
+    # The Unlicense: `ksni`, the pure-Rust StatusNotifierItem tray backend.
+    "Unlicense",
     "ISC",
     "Unicode-3.0",
     "Zlib",

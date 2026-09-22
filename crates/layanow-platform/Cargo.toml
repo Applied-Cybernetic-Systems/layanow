@@ -13,6 +13,11 @@ thiserror = "2"
 # The `OverlayApp` trait exposes `egui::Context`, so egui is needed everywhere.
 egui = { version = "0.32", default-features = false, features = ["default_fonts"] }
 interprocess = "2.4.4"
+# Cloneable command channel shared by the socket server and the tray.
+crossbeam-channel = "0.5"
+# Decode the embedded PNG tray icon (the Linux `ksni` backend has no
+# `Icon::from_path`).
+png = "0.18"
 
 # Overlay windowing (ADR-20/31). On Linux this is a wlr-layer-shell surface:
 # `winit` (and therefore eframe) cannot create layer surfaces, so the host talks
@@ -32,7 +37,18 @@ libc = "0.2"
 # Read the Wayland PRIMARY selection without a window or clipboard round-trip
 # (ADR-5/ADR-13, `RESOLVERS.md`). The crate speaks `ext-data-control` /
 # `wlr-data-control` v2, which MangoWC/wlroots provide.
+# Read the Wayland PRIMARY selection without a window or clipboard round-trip
+# (ADR-5/ADR-13, `RESOLVERS.md`). The crate speaks `ext-data-control` /
+# `wlr-data-control` v2, which MangoWC/wlroots provide.
 wl-clipboard-rs = "0.9"
+# System tray (ADR-20/35): the pure-Rust `ksni` (StatusNotifierItem) backend
+# speaks D-Bus directly, so no GTK/main loop is needed. `default-features = false`
+# avoids `libappindicator`.
+tray-icon = { version = "0.25", default-features = false, features = ["ksni"] }
+
+# Native tray backend off Linux (no Linux-only features).
+[target.'cfg(not(target_os = "linux"))'.dependencies]
+tray-icon = { version = "0.25", default-features = false }
 
 [lints]
 workspace = true
