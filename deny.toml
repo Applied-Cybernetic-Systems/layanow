@@ -8,7 +8,11 @@ targets = [
 
 [advisories]
 version = 2
-ignore = []
+# `paste` is a build-time proc-macro pulled in by `tokenizers`. It is flagged
+# only as unmaintained (RUSTSEC-2024-0436), not vulnerable, and currently has no
+# compatible replacement adopted upstream — re-evaluate when `tokenizers` drops
+# or replaces it.
+ignore = ["RUSTSEC-2024-0436"]
 
 [licenses]
 version = 2
@@ -23,11 +27,15 @@ allow = [
     "Unicode-3.0",
     "Zlib",
     "MPL-2.0",
+    # Root-certificate data bundled by `webpki-roots` (via `ureq`/`rustls`).
+    "CDLA-Permissive-2.0",
 ]
 
 [bans]
 multiple-versions = "warn"
 wildcards = "deny"
+# Workspace crates depend on each other by path only.
+allow-wildcard-paths = true
 deny = []
 
 [sources]

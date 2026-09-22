@@ -54,6 +54,11 @@
           cmake
           openssl
 
+          # Build-time only: ONNX export + dynamic int8 quantization (ADR-9).
+          # Python never runs in the app; see tools/export/.
+          python312
+          uv
+
           # Model runtime (ort crate loads this; see ORT_DYLIB_PATH below)
           onnxruntime
 
@@ -87,6 +92,11 @@
           # Fallback for link-time builds (ORT_STRATEGY=system).
           export ORT_STRATEGY="system"
           export ORT_LIB_LOCATION="${pkgs.onnxruntime}"
+
+          # --- Build-time Python (tools/export) -----------------------------
+          # Pip-installed torch/onnxruntime wheels need the C++ runtime and
+          # zlib, which Nix does not put on the loader path by default.
+          export LD_LIBRARY_PATH="${pkgs.stdenv.cc.cc.lib}/lib:${pkgs.zlib}/lib''${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
 
           # --- Wayland / GPU ------------------------------------------------
           export WAYLAND_DISPLAY="''${WAYLAND_DISPLAY:-wayland-0}"

@@ -6,13 +6,18 @@ members = ["crates/*"]
 edition = "2024"
 rust-version = "1.85"
 license = "MIT OR Apache-2.0"
+# Private workspace (ADR-22): nothing here is published, so internal crates may
+# depend on each other by path only (cargo-deny `wildcards`).
+publish = false
 
 # Workspace lint policy — authoritative for all member crates.
 # Member crates opt in with `[lints] workspace = true`.
 [workspace.lints.rust]
 unsafe_code = "deny"
 missing_docs = "warn"
-rust_2018_idioms = "warn"
+# Lower priority than the individual lints below (which are members of this
+# group), so they can be set independently; clippy::lint_groups_priority.
+rust_2018_idioms = { level = "warn", priority = -1 }
 unused_lifetimes = "warn"
 elided_lifetimes_in_paths = "warn"
 let_underscore_drop = "warn"
