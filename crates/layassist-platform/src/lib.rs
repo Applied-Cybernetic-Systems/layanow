@@ -7,6 +7,9 @@
 #![allow(unsafe_code)]
 #![cfg_attr(test, allow(clippy::unwrap_used, clippy::expect_used, clippy::panic))]
 
+/// The overlay host: a Wayland layer-shell surface rendering egui (ADR-20).
+pub mod overlay;
+
 /// Returns whether the accessibility resolver can run on this system.
 ///
 /// Real implementation lands in M4 (Linux `atspi`).

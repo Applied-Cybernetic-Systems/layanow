@@ -9,6 +9,25 @@ publish.workspace = true
 [dependencies]
 layassist-core = { path = "../layassist-core" }
 layassist-resolvers = { path = "../layassist-resolvers" }
+thiserror = "2"
+# The `OverlayApp` trait exposes `egui::Context`, so egui is needed everywhere.
+egui = { version = "0.32", default-features = false, features = ["default_fonts"] }
+
+# Overlay windowing (ADR-20/31). On Linux this is a wlr-layer-shell surface:
+# `winit` (and therefore eframe) cannot create layer surfaces, so the host talks
+# Wayland directly through `smithay-client-toolkit` and renders egui with
+# `egui_glow` on an EGL/GLES context bound to the layer surface. Non-Linux
+# overlays are not implemented yet, so these are Linux-only.
+[target.'cfg(target_os = "linux")'.dependencies]
+egui_glow = "0.32"
+glow = "0.16"
+glutin = { version = "0.32", default-features = false, features = ["egl", "wayland"] }
+raw-window-handle = "0.6"
+smithay-client-toolkit = { version = "0.20", default-features = false, features = ["xkbcommon"] }
+# `system` selects the libwayland backend, so `wl_display`/`wl_surface` are real
+# pointers EGL can bind to (the pure-Rust backend exposes none).
+wayland-client = { version = "0.31", features = ["system"] }
+libc = "0.2"
 
 [lints]
 workspace = true

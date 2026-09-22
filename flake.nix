@@ -93,10 +93,11 @@
           export ORT_STRATEGY="system"
           export ORT_LIB_LOCATION="${pkgs.onnxruntime}"
 
-          # --- Build-time Python (tools/export) -----------------------------
-          # Pip-installed torch/onnxruntime wheels need the C++ runtime and
-          # zlib, which Nix does not put on the loader path by default.
-          export LD_LIBRARY_PATH="${pkgs.stdenv.cc.cc.lib}/lib:${pkgs.zlib}/lib''${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+          # --- Native runtime libraries -------------------------------------
+          # `wayland-sys`/`glutin` dlopen libwayland/libEGL at runtime, and
+          # pip-installed torch/onnxruntime wheels need the C++ runtime and
+          # zlib; Nix does not put any of these on the loader path by default.
+          export LD_LIBRARY_PATH="${pkgs.stdenv.cc.cc.lib}/lib:${pkgs.zlib}/lib:${pkgs.wayland}/lib:${pkgs.libxkbcommon}/lib:${pkgs.libGL}/lib:${pkgs.mesa}/lib:${pkgs.vulkan-loader}/lib''${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
 
           # --- Wayland / GPU ------------------------------------------------
           export WAYLAND_DISPLAY="''${WAYLAND_DISPLAY:-wayland-0}"

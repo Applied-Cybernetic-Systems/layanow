@@ -3,7 +3,12 @@
 //! Per ADR-14/25 the layer is transparent and **click-through** (the pointer
 //! passes to the app underneath) while it keeps **keyboard interactivity**
 //! (ADR-26). Results are dismissed with a click (ADR-15), at which point the
-//! layer briefly takes the pointer so the click is seen.
+//! host takes the pointer so the click is seen.
+//!
+//! The windowing/host (a Wayland layer-shell surface) lives in
+//! `layassist-platform` (ADR-20); this type only draws widgets and holds the
+//! capture/decision state. It is driven through
+//! [`OverlayApp`](layassist_platform::overlay::OverlayApp).
 //!
 //! M3 has no platform selection resolver yet (M4): a text field stands in, and
 //! its committed entries are fed through
@@ -11,9 +16,8 @@
 //! auto-captured selection. The field is auto-focused so it works without the
 //! pointer.
 
-use eframe::egui;
-
 use layassist_core::Session;
+use layassist_platform::overlay::OverlayApp;
 use layassist_resolvers::{StubResolver, TextResolver};
 
 use crate::results::{self, DEFAULT_CONFIDENCE_THRESHOLD, Results};
@@ -49,6 +53,7 @@ pub struct Overlay {
     phase: Phase,
     entry: String,
     threshold: f32,
+    exit: bool,
 }
 
 impl Overlay {
@@ -62,6 +67,7 @@ impl Overlay {
             phase: Phase::Capturing,
             entry: String::new(),
             threshold: DEFAULT_CONFIDENCE_THRESHOLD,
+            exit: false,
         }
     }
 
@@ -191,17 +197,10 @@ impl Overlay {
     }
 }
 
-impl eframe::App for Overlay {
-    fn clear_color(&self, _visuals: &egui::Visuals) -> [f32; 4] {
-        // Fully transparent; the dim comes from the panel fill below.
-        [0.0, 0.0, 0.0, 0.0]
-    }
-
-    fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+impl OverlayApp for Overlay {
+    fn update(&mut self, ctx: &egui::Context) {
         self.poll();
         self.capture();
-
-        let showing_results = matches!(self.phase, Phase::Results(_));
 
         if ctx.input_mut(|input| input.consume_key(egui::Modifiers::NONE, egui::Key::Tab)) {
             self.commit_entry();
@@ -210,19 +209,29 @@ impl eframe::App for Overlay {
             self.decide();
         }
         if ctx.input(|input| input.key_pressed(egui::Key::Escape)) {
+            // `Esc` on an empty session quits the applet; otherwise it cancels.
+            if matches!(self.phase, Phase::Capturing) && self.session.is_empty() {
+                self.exit = true;
+            } else {
+                self.dismiss();
+            }
+        }
+        if matches!(self.phase, Phase::Results(_)) && ctx.input(|input| input.pointer.any_click()) {
             self.dismiss();
         }
-        if showing_results && ctx.input(|input| input.pointer.any_click()) {
-            self.dismiss();
-        }
-
-        // Click-through while capturing (ADR-14); take the pointer only to see
-        // the dismissing click once results are shown (ADR-15).
-        ctx.send_viewport_cmd(egui::ViewportCommand::MousePassthrough(!showing_results));
 
         egui::CentralPanel::default()
             .frame(egui::Frame::NONE.fill(egui::Color32::from_black_alpha(60)))
             .show(ctx, |ui| self.draw(ui));
+    }
+
+    fn wants_pointer(&self) -> bool {
+        // The pointer is captured only to receive the dismissing click (ADR-15).
+        matches!(self.phase, Phase::Results(_))
+    }
+
+    fn should_exit(&self) -> bool {
+        self.exit
     }
 }
 

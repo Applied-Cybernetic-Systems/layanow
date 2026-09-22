@@ -20,10 +20,16 @@ M0–M2 complete: the `layassist-model` crate acquires/verifies the ONNX bundle,
 loads a checkpoint through `ort`, ports Laya's rendering/calibration, and
 replays committed golden fixtures against the `rl_common.py` reference.
 
-M3 in progress: the `Session` item model, a resolver stub, the channel-based
-inference worker, the results panel, and an `eframe`/`glow` click-through
-overlay are in place (ADR-30). True Wayland layer-shell keyboard interactivity
-and the Linux selection backends are M4. See `PLAN.md`.
+M3 complete: the `Session` item model, a resolver stub, the channel-based
+inference worker, the results panel, and a click-through Wayland
+`wlr-layer-shell` overlay (egui on EGL/`egui_glow`) are in place (ADR-30/31).
+The Linux selection backends are M4.
+
+```sh
+nix develop
+cargo run -p layassist-app     # click-through layer-shell overlay
+# type an item, Tab to capture · Enter to decide · Esc to cancel/quit
+```
 
 ## Documentation
 

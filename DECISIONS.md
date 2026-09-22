@@ -252,3 +252,29 @@ click-through (ADR-26) are not yet wired — eframe's winit window relies on X11
 focus for keys — so the overlay is compile- and unit-tested but not yet
 visually verified; that, and removing the `Tab`-capture stub, is M4 work. The
 "take the pointer to dismiss results" interpretation of ADR-15 is provisional.
+
+## ADR-31 — Wayland overlay is a wlr-layer-shell host (supersedes ADR-30's window)
+**Decision:** Replace the eframe window with a purpose-built Wayland host in
+`layassist-platform` (`overlay::run`). It creates a `wlr-layer-shell` surface
+(`Layer::Overlay`, anchored to every edge, `exclusive_zone = -1`,
+`KeyboardInteractivity::Exclusive`), renders egui through `egui_glow` on an
+EGL/GLES context bound to that surface (`glutin`, with the raw `wl_display` /
+`wl_surface` from `smithay-client-toolkit`), and drives its own event loop
+(`calloop`-free: `libc::poll` on the connection fd with a 16 ms timeout). The
+pointer is **click-through** via an empty `wl_surface` input region (ADR-14),
+switched to the full region only while results are shown so the dismissing click
+is seen (ADR-15). The UI stays in `layassist-app` behind the `OverlayApp` trait.
+`eframe` is dropped from the dependency tree.
+**Why:** `winit`/`eframe` only create `xdg_toplevel` windows, which cannot be
+always-on-top, click-through, *and* keyboard-interactive on Wayland; that
+combination is exactly what `wlr-layer-shell` provides (ADR-20/26). All render
+dependencies (`egui_glow`, `glutin`, `glow`, `smithay-client-toolkit`) were
+already present transitively via eframe, so this is a re-pointing, not a new
+stack. The `system` feature of `wayland-client` is required so EGL receives real
+libwayland pointers (the pure-Rust backend exposes none); the dev shell adds
+`wayland`, `libGL`, `mesa`, `libxkbcommon` to `LD_LIBRARY_PATH` so those
+libraries load at runtime.
+**Consequence:** Linux/Wayland only for now; `overlay::run` returns
+`OverlayError::Unsupported` elsewhere, and the Wayland deps are `cfg`-gated to
+Linux. Verified to map a 1920x1200 layer surface and initialise GL on MangoWC;
+the `Tab`-to-capture stub still stands in until the M4 selection backends.
