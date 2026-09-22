@@ -78,10 +78,10 @@ impl Overlay {
         let typed = self.entry.trim();
         Self::debug(&format!("capture_item entry_len={}", typed.len()));
         if !typed.is_empty() {
-            // v1 has no dedicated `Source` for typed text; it is treated as a
-            // manual selection.
+            // Typed text was not read from the screen; record that provenance
+            // so it can be told apart from a native highlight.
             let selection =
-                Selection { text: typed.to_string(), source: Source::Selection, bounds: None };
+                Selection { text: typed.to_string(), source: Source::Manual, bounds: None };
             self.entry.clear();
             self.push(selection);
             return;
@@ -409,6 +409,24 @@ mod tests {
         assert_eq!(overlay.session.question_text(), Some("Which planet?"));
         assert!(overlay.entry.is_empty());
         assert!(overlay.status.is_none());
+    }
+
+    #[test]
+    fn typed_entry_is_recorded_as_manual() {
+        let (mut overlay, _resolver) = overlay();
+        overlay.entry = "Which planet?".to_string();
+        overlay.capture_item();
+        let source = overlay.session.question().map(|item| item.selection.source);
+        assert_eq!(source, Some(Source::Manual));
+    }
+
+    #[test]
+    fn highlight_is_recorded_as_a_selection() {
+        let (mut overlay, resolver) = overlay();
+        resolver.set("Which planet?");
+        overlay.capture_item();
+        let source = overlay.session.question().map(|item| item.selection.source);
+        assert_eq!(source, Some(Source::Selection));
     }
 
     #[test]

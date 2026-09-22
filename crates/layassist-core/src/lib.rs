@@ -23,6 +23,8 @@ pub struct Rect {
 pub enum Source {
     /// The operating system's selection buffer (e.g. PRIMARY on Linux).
     Selection,
+    /// Text the user typed into the overlay, not read from the screen.
+    Manual,
     /// The accessibility tree.
     Accessibility,
     /// Optical character recognition (reserved; not implemented in v1).

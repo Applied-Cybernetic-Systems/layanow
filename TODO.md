@@ -55,7 +55,6 @@ agents must update it whenever work is started, finished, or newly discovered.
 - **T-137** · 2026-09-22 · resolve — Decide the fallback for apps that never publish PRIMARY (e.g. Zed): accessibility, OCR, or opt-in copy-with-save/restore; document the shortlist. (`README.md` "# Text capture")
 
 ### Core & data model
-- **T-132** · 2026-09-22 · core — Add `Source::Manual` so typed items carry provenance instead of being recorded as `Source::Selection`.
 - **T-159** · 2026-09-22 · core — `Selection.bounds`/`Rect` are currently unused; wire them when the a11y/OCR resolvers land, or drop them if no resolver will populate them. (`RESOLVERS.md`)
 - **T-160** · 2026-09-22 · core — Decide the fate of `TextResolver::watch`/`SelectionStream` now that auto-capture was dropped (remove the unused API, or keep it explicitly for the future). (ADR-26/33)
 
@@ -81,7 +80,6 @@ agents must update it whenever work is started, finished, or newly discovered.
 
 ### Docs & maintenance
 - **T-158** · 2026-09-22 · docs — M6 documentation pass: refresh `README.md`/`PLAN.md`/`RESOLVERS.md` after M5 lands (status, quickstart, settings).
-- **T-161** · 2026-09-22 · build — The platform selection module (`src/selection*`) and `examples/read_primary.rs` are untracked; stage/commit them with the ADR-33 change.
 - **T-162** · 2026-09-22 · docs — Decide whether to annotate superseded ADRs (ADR-16 → ADR-28, ADR-30 → ADR-31 → ADR-33) with a "Superseded by" pointer, or document the supersession convention once in `DECISIONS.md`.
 - **T-164** · 2026-09-22 · docs — Maintain a short list of apps known not to publish PRIMARY (Zed, Alacritty untested) and the recommended workaround, so users can self-diagnose. (`README.md`)
 
@@ -107,3 +105,5 @@ _(empty — pick a task from **Open** and move its line here when you start it.)
 - **T-026** · 2026-09-22 · docs — `OPEN-QUESTIONS.md` E8 (MSRV/edition) listed as deferred though decided. **Closed:** moved to resolved.
 - **T-027** · 2026-09-22 · build — `deny.toml` allowed `MPL-2.0`, which no dependency uses (warning). **Closed:** allowance removed.
 - **T-028** · 2026-09-22 · docs — No documentation of the highlight-buffer requirement or diagnostics. **Closed:** added a "Text capture" section to `README.md` (`wl-paste -p`, `read_primary`, `LAYASSIST_DEBUG`).
+- **T-161** · 2026-09-22 · build — The platform selection module (`src/selection*`) and `examples/read_primary.rs` are untracked; stage/commit them with the ADR-33 change. **Closed:** 2026-09-22 · already tracked and committed in `122612a`; verified with `git ls-files` on a clean tree.
+- **T-132** · 2026-09-22 · core — Add `Source::Manual` so typed items carry provenance instead of being recorded as `Source::Selection`. **Closed:** 2026-09-22 · added the `Source::Manual` variant; `Overlay::capture_item` now tags typed items `Manual` while highlights stay `Selection`, with tests for both provenances; shipped in the `feat(core): record typed items as Source::Manual (T-132)` commit.

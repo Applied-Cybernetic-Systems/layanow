@@ -11,7 +11,7 @@ A resolver turns the user's **native text selection** into text for the app.
 ```rust
 pub struct Selection {
     pub text: String,
-    pub source: Source,               // Selection (v1) | Accessibility | Ocr (future)
+    pub source: Source,               // Selection (native) | Manual (typed) | Accessibility | Ocr (future)
     pub bounds: Option<Rect>,         // screen coords, if known
 }
 
