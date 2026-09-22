@@ -28,6 +28,10 @@ smithay-client-toolkit = { version = "0.20", default-features = false, features 
 # pointers EGL can bind to (the pure-Rust backend exposes none).
 wayland-client = { version = "0.31", features = ["system"] }
 libc = "0.2"
+# Read the Wayland PRIMARY selection without a window or clipboard round-trip
+# (ADR-5/ADR-13, `RESOLVERS.md`). The crate speaks `ext-data-control` /
+# `wlr-data-control` v2, which MangoWC/wlroots provide.
+wl-clipboard-rs = "0.9"
 
 [lints]
 workspace = true

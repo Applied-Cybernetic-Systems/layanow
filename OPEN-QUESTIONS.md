@@ -18,12 +18,13 @@ Decisions live in `DECISIONS.md` as ADRs. This file tracks what is still open.
 | A10 | Hotkey | User-managed (ADR-19) |
 | A11 | Tray library | **`tray-icon`** (ADR-20) |
 | A12 | Overlay windowing | Per-platform; renderer cross-platform (ADR-20) |
-| A14 | Capture mechanism | **Auto-capture** selection changes + overlay keyboard interactivity (ADR-26) |
+| A14 | Capture mechanism | Overlay keyboard interactivity + **`Tab`-commit of the PRIMARY highlight or a typed entry** (ADR-26 revised by ADR-33); auto-capture is future work |
 | B3 | X11 support | Wayland + X11 (ADR-21) |
 | C1–C7 | Model defaults | See ADR-27 |
 | D1 | v1 platform | Linux; order Linux → Windows → macOS |
 | E1 | Git | `github.com/Uiyx/layassist` (private) (ADR-22) |
 | E3 | Testing fixtures | **Commit generated golden fixtures** for the rendering/calibration port; replay offline (ADR-29) |
+| E8 | MSRV/edition | **Rust 1.85 / edition 2024** (pinned in `Cargo.toml`/`rust-toolchain.toml`) |
 
 ## Deferred (decide later)
 
@@ -36,6 +37,5 @@ Decisions live in `DECISIONS.md` as ADRs. This file tracks what is still open.
 - [ ] **E5. Config** — TOML at `~/.config/layassist/config.toml`; which keys in v1?
 - [ ] **E6. History/privacy** — keep a local decision log? Retention?
 - [ ] **E7. Lint strictness** — keep `clippy::pedantic` warn + CI `-D warnings`?
-- [ ] **E8. MSRV/edition** — Rust 1.85 / edition 2024.
 - [ ] **E9. Telemetry** — none (assumed).
 - [ ] **E10. Localization** — UI English-only in v1?

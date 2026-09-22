@@ -2,23 +2,23 @@
 //!
 //! Per ADR-14/25 the layer is transparent and **click-through** (the pointer
 //! passes to the app underneath) while it keeps **keyboard interactivity**
-//! (ADR-26). Results are dismissed with a click (ADR-15), at which point the
-//! host takes the pointer so the click is seen.
+//! (ADR-26). Items are captured on **`Tab`**: the field text if the user typed
+//! something, otherwise the current native **PRIMARY** highlight. The first
+//! item is the question, every later one an answer (ADR-33). `Enter` decides,
+//! `Esc` cancels (or quits when nothing is captured), and a click dismisses the
+//! results (ADR-15).
 //!
 //! The windowing/host (a Wayland layer-shell surface) lives in
 //! `layassist-platform` (ADR-20); this type only draws widgets and holds the
 //! capture/decision state. It is driven through
-//! [`OverlayApp`](layassist_platform::overlay::OverlayApp).
-//!
-//! M3 has no platform selection resolver yet (M4): a text field stands in, and
-//! its committed entries are fed through
-//! [`StubResolver`](layassist_resolvers::StubResolver) exactly like a real
-//! auto-captured selection. The field is auto-focused so it works without the
-//! pointer.
+//! [`OverlayApp`](layassist_platform::overlay::OverlayApp). Resolving the
+//! selection is delegated to a
+//! [`TextResolver`](layassist_resolvers::TextResolver) supplied by the platform
+//! (`layassist_platform::selection`).
 
-use layassist_core::Session;
+use layassist_core::{Selection, Session, Source};
 use layassist_platform::overlay::OverlayApp;
-use layassist_resolvers::{StubResolver, TextResolver};
+use layassist_resolvers::TextResolver;
 
 use crate::results::{self, DEFAULT_CONFIDENCE_THRESHOLD, Results};
 use crate::theme;
@@ -40,51 +40,98 @@ enum Phase {
 /// The egui application behind the overlay.
 pub struct Overlay {
     session: Session,
-    resolver: StubResolver,
+    resolver: Box<dyn TextResolver>,
     worker: Worker,
     phase: Phase,
-    entry: String,
     threshold: f32,
+    /// A short user-facing hint (e.g. "no selection") drawn while capturing.
+    status: Option<String>,
+    /// Freely typed item text, captured when `Tab` is pressed.
+    entry: String,
     exit: bool,
 }
 
 impl Overlay {
-    /// Create the overlay driving `worker`.
+    /// Create the overlay driving `worker` and reading selections from
+    /// `resolver`.
     #[must_use]
-    pub fn new(worker: Worker) -> Self {
+    pub fn new(worker: Worker, resolver: Box<dyn TextResolver>) -> Self {
         Self {
             session: Session::new(),
-            resolver: StubResolver::new(),
+            resolver,
             worker,
             phase: Phase::Capturing,
-            entry: String::new(),
             threshold: DEFAULT_CONFIDENCE_THRESHOLD,
+            status: None,
+            entry: String::new(),
             exit: false,
         }
     }
 
-    /// Drain resolved selections into the session (auto-capture, ADR-26).
-    fn capture(&mut self) {
-        while let Ok(Some(selection)) = self.resolver.resolve_current_selection() {
-            self.session.push(selection);
+    /// Capture one item on `Tab`: the typed entry if there is one, otherwise
+    /// the current native (PRIMARY) selection (ADR-33).
+    ///
+    /// Typing stays available as a fallback when nothing is highlighted. A
+    /// repeat of the most recent item is ignored so a double-tap does not add
+    /// the same text twice.
+    fn capture_item(&mut self) {
+        let typed = self.entry.trim();
+        Self::debug(&format!("capture_item entry_len={}", typed.len()));
+        if !typed.is_empty() {
+            // v1 has no dedicated `Source` for typed text; it is treated as a
+            // manual selection.
+            let selection =
+                Selection { text: typed.to_string(), source: Source::Selection, bounds: None };
+            self.entry.clear();
+            self.push(selection);
+            return;
+        }
+        match self.resolver.resolve_current_selection() {
+            Ok(Some(selection)) => {
+                Self::debug(&format!("captured highlight_len={}", selection.text.len()));
+                self.push(selection);
+            }
+            Ok(None) => {
+                Self::debug("no highlight found");
+                self.status = Some(
+                    "no highlight found — the app may not publish it (type instead)".to_string(),
+                );
+            }
+            Err(error) => {
+                Self::debug(&format!("resolver error: {error}"));
+                self.status = Some(format!("selection error: {error}"));
+            }
         }
     }
 
-    /// Queue the manual entry as a selection.
+    /// Print a capture diagnostic when `LAYASSIST_DEBUG` is set.
     ///
-    /// This is the M3 stand-in for the platform selection resolver (M4).
-    fn commit_entry(&mut self) {
-        let text = self.entry.trim().to_string();
-        if !text.is_empty() {
-            self.resolver.queue(text);
-            self.entry.clear();
-            self.capture();
+    /// Only lengths are logged, never the selected text.
+    fn debug(message: &str) {
+        if std::env::var_os("LAYASSIST_DEBUG").is_some() {
+            eprintln!("layassist: {message}");
+        }
+    }
+
+    /// Append `selection`, ignoring a repeat of the most recent item.
+    fn push(&mut self, selection: Selection) {
+        let repeated =
+            self.session.items().last().is_some_and(|item| item.selection.text == selection.text);
+        if repeated {
+            self.status = Some("already captured".to_string());
+        } else {
+            self.session.push(selection);
+            self.status = None;
         }
     }
 
     /// Run a decision if enough has been captured and nothing is in flight.
     fn decide(&mut self) {
-        if matches!(self.phase, Phase::Running) || !self.session.is_ready() {
+        if matches!(self.phase, Phase::Running) {
+            return;
+        }
+        if !self.session.is_ready() {
+            self.status = Some("capture a question and at least one answer first".to_string());
             return;
         }
         let Some(question) = self.session.question_text().map(str::to_string) else {
@@ -113,6 +160,7 @@ impl Overlay {
     fn dismiss(&mut self) {
         self.phase = Phase::Capturing;
         self.session.clear();
+        self.status = None;
         self.entry.clear();
     }
 
@@ -140,50 +188,54 @@ impl Overlay {
         }
     }
 
+    fn draw_capturing(&mut self, ui: &mut egui::Ui) {
+        if let Some(question) = self.session.question() {
+            theme::shadowed_text(
+                ui,
+                &format!("Question: {}", question.selection.text),
+                theme::BLUE,
+                theme::BODY_SIZE,
+            );
+        } else {
+            theme::shadowed_text(ui, "Highlight the question text…", theme::FG4, theme::BODY_SIZE);
+        }
+        for (index, answer) in self.session.answers().iter().enumerate() {
+            theme::shadowed_text(
+                ui,
+                &format!("Answer {}: {}", index + 1, answer.selection.text),
+                theme::GREEN,
+                theme::BODY_SIZE,
+            );
+        }
+        ui.add_space(12.0);
+        let response = ui.add(
+            egui::TextEdit::singleline(&mut self.entry)
+                .hint_text("type an item — or highlight text — then press Tab")
+                .desired_width(480.0),
+        );
+        response.request_focus();
+        if let Some(status) = &self.status {
+            theme::shadowed_text(ui, status, theme::YELLOW, theme::BODY_SIZE);
+        }
+        theme::shadowed_text(
+            ui,
+            "Tab: add · Enter: decide · Esc: cancel/quit",
+            theme::FG4,
+            theme::BODY_SIZE,
+        );
+    }
+
     fn draw(&mut self, ui: &mut egui::Ui) {
         ui.vertical_centered(|ui| {
             ui.add_space(48.0);
             theme::shadowed_text(ui, "layassist", theme::FG0, theme::TITLE_SIZE);
             ui.add_space(8.0);
+            if matches!(self.phase, Phase::Capturing) {
+                self.draw_capturing(ui);
+                return;
+            }
             match &self.phase {
-                Phase::Capturing => {
-                    if let Some(question) = self.session.question() {
-                        theme::shadowed_text(
-                            ui,
-                            &format!("Question: {}", question.selection.text),
-                            theme::BLUE,
-                            theme::BODY_SIZE,
-                        );
-                    } else {
-                        theme::shadowed_text(
-                            ui,
-                            "Select the question text…",
-                            theme::FG4,
-                            theme::BODY_SIZE,
-                        );
-                    }
-                    for (index, answer) in self.session.answers().iter().enumerate() {
-                        theme::shadowed_text(
-                            ui,
-                            &format!("Answer {}: {}", index + 1, answer.selection.text),
-                            theme::GREEN,
-                            theme::BODY_SIZE,
-                        );
-                    }
-                    ui.add_space(12.0);
-                    let response = ui.add(
-                        egui::TextEdit::singleline(&mut self.entry)
-                            .hint_text("type an item, then press Tab to capture (M3 stub)")
-                            .desired_width(480.0),
-                    );
-                    response.request_focus();
-                    theme::shadowed_text(
-                        ui,
-                        "Tab: capture item · Enter: decide · Esc: cancel",
-                        theme::FG4,
-                        theme::BODY_SIZE,
-                    );
-                }
+                Phase::Capturing => {}
                 Phase::Running => {
                     ui.spinner();
                     theme::shadowed_text(ui, "Deciding…", theme::FG1, theme::BODY_SIZE);
@@ -214,13 +266,14 @@ impl OverlayApp for Overlay {
 
     fn update(&mut self, ctx: &egui::Context) {
         self.poll();
-        self.capture();
 
-        if ctx.input_mut(|input| input.consume_key(egui::Modifiers::NONE, egui::Key::Tab)) {
-            self.commit_entry();
-        }
-        if ctx.input(|input| input.key_pressed(egui::Key::Enter)) {
-            self.decide();
+        if matches!(self.phase, Phase::Capturing) {
+            if ctx.input_mut(|input| input.consume_key(egui::Modifiers::NONE, egui::Key::Tab)) {
+                self.capture_item();
+            }
+            if ctx.input(|input| input.key_pressed(egui::Key::Enter)) {
+                self.decide();
+            }
         }
         if ctx.input(|input| input.key_pressed(egui::Key::Escape)) {
             // `Esc` on an empty session quits the applet; otherwise it cancels.
@@ -251,9 +304,13 @@ impl OverlayApp for Overlay {
 
 #[cfg(test)]
 mod tests {
+    use std::sync::{Arc, Mutex};
+
     use super::*;
     use crate::worker::DecisionEngine;
+    use layassist_core::{Selection, Source};
     use layassist_model::RankedAnswer;
+    use layassist_resolvers::{ResolveError, SelectionStream};
 
     /// An engine that ranks the first answer highest.
     struct FirstWins;
@@ -279,8 +336,45 @@ mod tests {
         }
     }
 
-    fn overlay() -> Overlay {
-        Overlay::new(Worker::spawn(FirstWins))
+    /// A resolver whose "current selection" the test sets directly.
+    #[derive(Clone, Default)]
+    struct TestResolver {
+        current: Arc<Mutex<Option<Selection>>>,
+    }
+
+    impl TestResolver {
+        fn set(&self, text: &str) {
+            *self.current.lock().expect("test lock") =
+                Some(Selection { text: text.to_string(), source: Source::Selection, bounds: None });
+        }
+    }
+
+    impl TextResolver for TestResolver {
+        fn name(&self) -> &'static str {
+            "test"
+        }
+
+        fn available(&self) -> bool {
+            true
+        }
+
+        fn resolve_current_selection(&self) -> Result<Option<Selection>, ResolveError> {
+            Ok(self.current.lock().expect("test lock").clone())
+        }
+
+        fn watch(&self) -> Option<SelectionStream> {
+            None
+        }
+    }
+
+    fn overlay_with(engine: impl DecisionEngine) -> (Overlay, TestResolver) {
+        let resolver = TestResolver::default();
+        let overlay = Overlay::new(Worker::spawn(engine), Box::new(resolver.clone()));
+        (overlay, resolver)
+    }
+
+    fn overlay() -> (Overlay, TestResolver) {
+        overlay_with(FirstWins)
     }
 
     /// Poll until the worker replies, mirroring the per-frame `update` loop.
@@ -296,32 +390,69 @@ mod tests {
     }
 
     #[test]
-    fn committing_entries_builds_a_session() {
-        let mut overlay = overlay();
-        overlay.entry = "Which planet?".to_string();
-        overlay.commit_entry();
-        overlay.entry = "Mars".to_string();
-        overlay.commit_entry();
+    fn highlight_captures_build_a_session() {
+        let (mut overlay, resolver) = overlay();
+        resolver.set("Which planet?");
+        overlay.capture_item();
+        resolver.set("Mars");
+        overlay.capture_item();
         assert_eq!(overlay.session.question_text(), Some("Which planet?"));
         assert_eq!(overlay.session.answer_texts(), ["Mars"]);
+        assert!(overlay.status.is_none());
+    }
+
+    #[test]
+    fn typed_entry_is_captured_and_cleared() {
+        let (mut overlay, _resolver) = overlay();
+        overlay.entry = "Which planet?".to_string();
+        overlay.capture_item();
+        assert_eq!(overlay.session.question_text(), Some("Which planet?"));
         assert!(overlay.entry.is_empty());
+        assert!(overlay.status.is_none());
+    }
+
+    #[test]
+    fn typed_entry_takes_precedence_over_a_highlight() {
+        let (mut overlay, resolver) = overlay();
+        resolver.set("native highlight");
+        overlay.entry = "typed".to_string();
+        overlay.capture_item();
+        assert_eq!(overlay.session.question_text(), Some("typed"));
+    }
+
+    #[test]
+    fn repeated_selection_is_only_captured_once() {
+        let (mut overlay, resolver) = overlay();
+        resolver.set("Which planet?");
+        overlay.capture_item();
+        overlay.capture_item();
+        assert_eq!(overlay.session.len(), 1);
+        assert!(overlay.status.is_some());
+    }
+
+    #[test]
+    fn nothing_to_add_sets_a_status_and_captures_nothing() {
+        let (mut overlay, _resolver) = overlay();
+        overlay.capture_item();
+        assert!(overlay.session.is_empty());
+        assert!(overlay.status.is_some());
     }
 
     #[test]
     fn decide_without_answers_stays_capturing() {
-        let mut overlay = overlay();
-        overlay.entry = "question only".to_string();
-        overlay.commit_entry();
+        let (mut overlay, resolver) = overlay();
+        resolver.set("question only");
+        overlay.capture_item();
         overlay.decide();
         assert!(matches!(overlay.phase, Phase::Capturing));
     }
 
     #[test]
     fn decide_then_poll_yields_results() {
-        let mut overlay = overlay();
+        let (mut overlay, resolver) = overlay();
         for text in ["Which planet?", "Mars", "Venus"] {
-            overlay.entry = text.to_string();
-            overlay.commit_entry();
+            resolver.set(text);
+            overlay.capture_item();
         }
         overlay.decide();
         assert!(matches!(overlay.phase, Phase::Running));
@@ -336,11 +467,14 @@ mod tests {
 
     #[test]
     fn dismiss_clears_the_session() {
-        let mut overlay = overlay();
-        overlay.entry = "q".to_string();
-        overlay.commit_entry();
+        let (mut overlay, resolver) = overlay();
+        resolver.set("q");
+        overlay.capture_item();
+        overlay.entry = "uncommitted".to_string();
         overlay.dismiss();
         assert!(overlay.session.is_empty());
+        assert!(overlay.status.is_none());
+        assert!(overlay.entry.is_empty());
         assert!(matches!(overlay.phase, Phase::Capturing));
     }
 
@@ -356,10 +490,10 @@ mod tests {
                 Err("no model".to_string())
             }
         }
-        let mut overlay = Overlay::new(Worker::spawn(Broken));
+        let (mut overlay, resolver) = overlay_with(Broken);
         for text in ["q", "a"] {
-            overlay.entry = text.to_string();
-            overlay.commit_entry();
+            resolver.set(text);
+            overlay.capture_item();
         }
         overlay.decide();
         wait_for_reply(&mut overlay);

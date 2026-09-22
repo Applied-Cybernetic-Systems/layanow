@@ -1,15 +1,12 @@
 //! Text resolvers: turn the user's native text selection into text for the app.
 //!
 //! See `RESOLVERS.md` for the resolution chain and per-platform backends. v1
-//! reads the OS selection buffer only (ADR-13); [`StubResolver`] stands in for
-//! the Linux backends until M4.
+//! reads the OS selection buffer only (ADR-13); the Linux/Wayland implementation
+//! lives in `layassist-platform::selection`.
 
 #![cfg_attr(test, allow(clippy::unwrap_used, clippy::expect_used, clippy::panic))]
 
-use std::collections::VecDeque;
-use std::sync::Mutex;
-
-use layassist_core::{Selection, Source};
+use layassist_core::Selection;
 
 /// Errors returned by a [`TextResolver`].
 #[derive(Debug)]
@@ -53,84 +50,16 @@ pub trait TextResolver: Send + Sync {
     fn watch(&self) -> Option<SelectionStream>;
 }
 
-/// A resolver whose selections are queued by the caller (M3 stub).
-///
-/// Until the Linux backends land in M4, the overlay's manual entry field queues
-/// a selection here, which [`TextResolver::resolve_current_selection`] drains
-/// one at a time. It touches no clipboard and no OS state.
-#[derive(Debug, Default)]
-pub struct StubResolver {
-    queued: Mutex<VecDeque<Selection>>,
-}
-
-impl StubResolver {
-    /// Create an empty stub resolver.
-    #[must_use]
-    pub fn new() -> Self {
-        Self::default()
-    }
-
-    /// Queue a selection with [`Source::Selection`] and no bounds.
-    pub fn queue(&self, text: impl Into<String>) {
-        self.queue_selection(Selection {
-            text: text.into(),
-            source: Source::Selection,
-            bounds: None,
-        });
-    }
-
-    /// Queue a fully-formed selection.
-    pub fn queue_selection(&self, selection: Selection) {
-        if let Ok(mut queued) = self.queued.lock() {
-            queued.push_back(selection);
-        }
-    }
-
-    /// Number of selections waiting to be resolved.
-    #[must_use]
-    pub fn pending(&self) -> usize {
-        self.queued.lock().map_or(0, |queued| queued.len())
-    }
-}
-
-impl TextResolver for StubResolver {
-    fn name(&self) -> &'static str {
-        "stub"
-    }
-
-    fn available(&self) -> bool {
-        true
-    }
-
-    fn resolve_current_selection(&self) -> Result<Option<Selection>, ResolveError> {
-        Ok(self.queued.lock().map_err(|_| ResolveError::Platform("poisoned".into()))?.pop_front())
-    }
-
-    fn watch(&self) -> Option<SelectionStream> {
-        None
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
 
     #[test]
-    fn stub_resolver_drains_queued_selections_in_order() {
-        let resolver = StubResolver::new();
-        assert!(resolver.available());
-        assert_eq!(resolver.pending(), 0);
-        assert!(resolver.resolve_current_selection().unwrap().is_none());
-
-        resolver.queue("first");
-        resolver.queue("second");
-        assert_eq!(resolver.pending(), 2);
-
-        let first = resolver.resolve_current_selection().unwrap().unwrap();
-        assert_eq!(first.text, "first");
-        assert_eq!(first.source, Source::Selection);
-        assert_eq!(resolver.resolve_current_selection().unwrap().unwrap().text, "second");
-        assert!(resolver.resolve_current_selection().unwrap().is_none());
-        assert!(resolver.watch().is_none());
+    fn errors_display_helpfully() {
+        assert_eq!(ResolveError::Unavailable.to_string(), "resolver unavailable on this system");
+        assert_eq!(
+            ResolveError::Platform("pipe closed".to_string()).to_string(),
+            "platform error: pipe closed"
+        );
     }
 }

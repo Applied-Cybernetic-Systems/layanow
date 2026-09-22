@@ -24,7 +24,7 @@ flake.nix               # dev shell (Rust toolchain, onnxruntime, a11y, Wayland)
 ```
 
 Docs: `PLAN.md`, `DECISIONS.md` (ADRs), `FEASIBILITY.md`, `RESOLVERS.md`,
-`LAYA.md`, `OPEN-QUESTIONS.md`.
+`LAYA.md`, `OPEN-QUESTIONS.md`, and `TODO.md` (the living task log; see below).
 
 ## Non-negotiable invariants
 
@@ -40,8 +40,23 @@ Docs: `PLAN.md`, `DECISIONS.md` (ADRs), `FEASIBILITY.md`, `RESOLVERS.md`,
    list-shaped so multi-answer can be added.
 6. **No SkillsBuild coupling** and no bundled answer bank (ADR-12).
 7. Default resource profile: **hot, int8, CPU-only**, documented soft budget
-   **≤ 3 GB** (ADR-11). No runtime enforcement.
+   **≤ 3 GB** (ADR-11). No runtime enforcement. *(The shipped English bundle is
+   currently fp32 — tracked as `TODO.md` T-120.)*
 8. `unsafe` code only in `layassist-platform`, isolated and documented.
+
+## Work tracking (`TODO.md`)
+
+`TODO.md` is the **living, issue-style task log** and must be updated as part
+of every change:
+
+- It has three sections: **Open**, **In Progress**, **Closed**.
+- One line per task with a stable `T-###` id, e.g.
+  `- **T-120** · YYYY-MM-DD · <milestone/area> · <title> — <detail> (refs)`.
+- When you start a task, move its line to **In Progress**; when you finish it,
+  move it to **Closed** and append `**Closed:** <outcome, date, commit>`.
+- Record anything you notice as a new **Open** line instead of acting silently.
+- The file header documents the full convention; keep it and the line format
+  accurate. New ids are never reused.
 
 ## Quality gate (must pass before "done")
 

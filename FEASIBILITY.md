@@ -77,11 +77,12 @@ or PRIMARY); AT-SPI must be running (devshell starts it).
 
 ## UI toolkit: egui over iced
 
-Both are fully cross-platform. **egui/eframe** chosen (ADR-10): more widely
-adopted and lighter; immediate-mode custom drawing fits the drag-to-mark overlay;
-transparent, undecorated, always-on-top windows are straightforward; idle CPU is
-near zero when not repainting. `iced` (retained/Elm-style) is more suited to
-complex forms and would be heavier for a transparent overlay.
+Both are fully cross-platform. **egui** chosen (ADR-10): more widely adopted and
+lighter; immediate-mode custom drawing fits a transparent overlay; idle CPU is
+near zero when not repainting. On Wayland the overlay is a custom
+`wlr-layer-shell` host (`smithay-client-toolkit` + `egui_glow`), not `eframe`
+(ADR-31). `iced` (retained/Elm-style) is more suited to complex forms and would
+be heavier for a transparent overlay.
 
 ## Resource budget
 

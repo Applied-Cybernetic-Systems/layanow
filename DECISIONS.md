@@ -294,3 +294,30 @@ option, so `theme::shadowed_text` lays the galley out once and paints it twice
 **Consequence:** UI colours live in `theme`; `results::probability_colour`
 mirrors the same gruvbox anchors and stays `egui`-free. Palette changes are a
 one-file edit.
+
+## ADR-33 — M4 capture: `Tab` commits the highlight or a typed item
+**Decision:** The overlay captures items two ways, both committed with **`Tab`**:
+(a) the current Wayland **PRIMARY** selection — the highlight buffer, never the
+regular clipboard — read once through `layassist-platform::selection` (a
+`TextResolver` over `wl-clipboard-rs`); and (b) the contents of the text field,
+so typing an item remains available as a fallback. If the field is non-empty it
+wins; otherwise the PRIMARY selection is used. The captured text is appended to
+the session (first = question, rest = answers), and consecutive repeats of the
+most recent item are ignored. `Enter` decides, `Esc` cancels (or quits when
+nothing is captured). This revises ADR-26, which specified auto-capture on
+every selection change; the keyboard-interactivity part of ADR-26 still holds.
+**Why:** The windowless `ext-data-control` / `wlr-data-control` protocols used
+to read PRIMARY expose no change notification, so `TextResolver::watch` returns
+`None`; a manual commit is the simplest reliable capture. PRIMARY is the
+highlight buffer and is separate from the regular clipboard, so this never
+clobbers what the user copied (ADR-5), and resolving on demand avoids the
+infinite "current selection" re-capture a drain loop would produce. Keeping the
+typed field means capture still works when nothing is selectable (and keeps the
+flow testable headlessly).
+**Consequence:** The M3 `StubResolver` indirection is removed — the overlay
+builds a `Selection` for typed text directly and uses the platform resolver for
+highlights. The platform selection resolver is wired in `main.rs`. True
+auto-capture (observing selection changes through the overlay surface's own
+`wl_data_device`) remains future work, as do the X11/Windows/macOS backends. A
+blocking pipe read happens on the UI thread when `Tab` is pressed; moving it to
+a worker is deferred until a backend can stall.

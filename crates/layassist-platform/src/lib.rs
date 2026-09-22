@@ -1,5 +1,6 @@
-//! Platform-specific backends: Wayland overlay, global hotkey, and the
-//! accessibility/selection resolver implementations.
+//! Platform-specific backends: the Wayland overlay host and the selection
+//! resolver. The global hotkey/tray (M5) and the accessibility resolver (M9)
+//! are not implemented yet.
 //!
 //! This is the **only** crate permitted to contain `unsafe` code. Any `unsafe`
 //! block must be isolated, minimal, and documented with a `// SAFETY:` comment.
@@ -10,10 +11,5 @@
 /// The overlay host: a Wayland layer-shell surface rendering egui (ADR-20).
 pub mod overlay;
 
-/// Returns whether the accessibility resolver can run on this system.
-///
-/// Real implementation lands in M4 (Linux `atspi`).
-#[must_use]
-pub fn accessibility_available() -> bool {
-    false
-}
+/// Platform selection resolvers: read the OS selection buffer (ADR-13).
+pub mod selection;

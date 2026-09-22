@@ -20,15 +20,17 @@ M0–M2 complete: the `layassist-model` crate acquires/verifies the ONNX bundle,
 loads a checkpoint through `ort`, ports Laya's rendering/calibration, and
 replays committed golden fixtures against the `rl_common.py` reference.
 
-M3 complete: the `Session` item model, a resolver stub, the channel-based
-inference worker, the results panel, and a click-through Wayland
-`wlr-layer-shell` overlay (egui on EGL/`egui_glow`) are in place (ADR-30/31).
-The Linux selection backends are M4.
+M4 in progress: the Wayland **PRIMARY selection** backend is wired (ADR-33) —
+highlight text natively and press `Tab` to add it as the question, repeat for
+each answer, then `Enter` to decide. Typing an item into the field and pressing
+`Tab` still works as a fallback. It reads PRIMARY (the highlight buffer) only
+and never touches the clipboard (ADR-5). The X11 and Windows/macOS backends
+remain.
 
 ```sh
 nix develop
 cargo run -p layassist-app     # click-through layer-shell overlay
-# type an item, Tab to capture · Enter to decide · Esc to cancel/quit
+# highlight text (or type), Tab to add · Enter to decide · Esc to cancel/quit
 ```
 
 ## Documentation
@@ -42,6 +44,7 @@ cargo run -p layassist-app     # click-through layer-shell overlay
 | `RESOLVERS.md` | `TextResolver` trait and per-platform backends |
 | `LAYA.md` | ONNX contract, checkpoint export, rendering port, calibration |
 | `OPEN-QUESTIONS.md` | Every decision still needing clarification |
+| `TODO.md` | Living, issue-style task log: Open / In Progress / Closed |
 
 ## Development environment (Nix)
 
@@ -72,6 +75,24 @@ cargo run -p layassist-app          # starts the tray applet, loads the model
 
 Hotkey: on Wayland/MangoWC a compositor bind runs `layassist toggle` (Wayland
 has no app-level global hotkeys). On Windows/macOS the applet registers it.
+
+## Text capture (highlight buffer)
+
+The text source is the OS **selection buffer** — on Wayland the **PRIMARY**
+highlight, never the clipboard (ADR-5/13). Highlight text with the **mouse** in
+the target app and press **`Tab`** in the overlay to add it (first = question,
+rest = answers). You can also type an item and press `Tab`.
+
+Not every app publishes a highlight buffer (Zed does not; browsers and most
+toolkits do). To check an app before running the applet, highlight text and run:
+
+```sh
+nix develop -c wl-paste -p     # prints the highlight, or nothing
+```
+
+The standalone probe is
+`cargo run -p layassist-platform --example read_primary`. Run the applet with
+`LAYASSIST_DEBUG=1` to log capture outcomes (lengths only, never the text).
 
 ## Model smoke test (M0)
 

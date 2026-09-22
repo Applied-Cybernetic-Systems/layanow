@@ -25,7 +25,9 @@ use crate::{Checkpoint, Quant, error::ModelError};
 pub const ALLOW_DOWNLOAD_ENV: &str = "LAYASSIST_ALLOW_MODEL_DOWNLOAD";
 /// Optional environment variable overriding the cache root.
 pub const CACHE_DIR_ENV: &str = "LAYASSIST_MODEL_CACHE";
-/// Default Hugging Face repo holding the English fp32 bundle.
+/// Default Hugging Face repo: the published English **fp32** bundle
+/// (`receptron/laya-onnx`). The multilingual checkpoint and int8 graphs are
+/// exported locally or selected via settings (ADR-28).
 pub const DEFAULT_REPO: &str = "receptron/laya-onnx";
 
 /// Files that make up a bundle, relative to its directory.
@@ -109,6 +111,9 @@ pub fn verify_bundle_from(repo: &str, dir: &Path) -> Result<(), ModelError> {
 
 /// Build a [`Checkpoint`] descriptor from an unpacked bundle directory.
 ///
+/// The graph is always `laya.onnx` inside `dir`; `quant` only records the
+/// intended precision (the bundle directory decides which graph that file is —
+/// e.g. an int8 export renames `laya_int8.onnx` to `laya.onnx`). See `LAYA.md`.
 /// Does not load the graph or tokenizer.
 pub fn checkpoint_from_dir(name: &str, dir: &Path, quant: Quant) -> Result<Checkpoint, ModelError> {
     let config = crate::config::load(&dir.join("laya_config.json"))?;

@@ -2,8 +2,8 @@
 //!
 //! Load the default checkpoint, start the inference worker, and run the
 //! click-through layer-shell overlay (`layassist-platform`). The tray icon,
-//! settings, and hotkey wiring land in M5; the platform selection resolver
-//! lands in M4.
+//! settings, and hotkey wiring land in M5. Selection capture uses the platform
+//! PRIMARY-selection backend (`layassist-platform::selection`, M4).
 
 #![cfg_attr(test, allow(clippy::unwrap_used, clippy::expect_used, clippy::panic))]
 
@@ -20,7 +20,8 @@ fn main() {
 
 fn run() -> Result<(), Box<dyn std::error::Error>> {
     let worker = load_worker()?;
-    layassist_platform::overlay::run(Overlay::new(worker))?;
+    let resolver = layassist_platform::selection::resolver();
+    layassist_platform::overlay::run(Overlay::new(worker, resolver))?;
     Ok(())
 }
 

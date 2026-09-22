@@ -17,8 +17,10 @@ We run it via **ONNX Runtime** in Rust (`ort`), not the Python `laya` package
 | `laya-typed-decisions` | ModernBERT-large | 421M | 1024 | 1024 / 256 |
 
 Each checkpoint ships its own `encoder/`, `tokenizer/`, `model.safetensors`, and
-`rl_agent_config.json`. Default: **int8**, one checkpoint resident (ADR-11);
-choice is a settings toggle (ADR-7).
+`rl_agent_config.json`. One checkpoint is resident (ADR-11); choice is a settings
+toggle (ADR-7). The shipped default is the published English **fp32** bundle
+(`receptron/laya-onnx`); multilingual and dynamic int8 graphs are build-time
+exports, with int8 an opt-in setting (ADR-28).
 
 ## ONNX graph contract
 
@@ -104,10 +106,10 @@ tools/golden/gen_render_fixtures.py \
 
 ## Quantization policy (A7 — decided)
 
-**Dynamic int8** (`onnxruntime.quantization.quantize_dynamic`) is the default:
-int8 weights, runtime-quantized activations, no calibration data, standard for
-transformer encoders. Keep the fp32 graph as a settings option and as the
-fallback if int8 regresses.
+**Dynamic int8** (`onnxruntime.quantization.quantize_dynamic`) was the intended
+default: int8 weights, runtime-quantized activations, no calibration data,
+standard for transformer encoders. Keep the fp32 graph as a settings option and
+as the fallback if int8 regresses — **M1 found it does; see below**.
 
 Acceptance: int8 vs fp32 top-1 agreement ≥ 99% and small JS/KL divergence on a
 sample of real inputs; if a labelled sample exists, top-1 accuracy within
@@ -119,7 +121,9 @@ context-bearing inputs but 50% on state-less inputs (70% overall)** — below th
 ≥ 99% bar. `per_channel=True` was much worse (27%); MatMul-only 73%. Peak RSS
 (ORT session, debug process): fp32 ≈ 2.1 GB, int8 ≈ 0.7 GB. **Therefore the
 multilingual checkpoint defaults to fp32** (ADR-28), with int8 an opt-in
-setting; English int8 is the published artifact and is unchanged.
+setting. The shipped English bundle (`receptron/laya-onnx`) is also fp32;
+ADR-16 calls for an English int8 default, which is not wired yet (see
+`OPEN-QUESTIONS.md` A4).
 
 ## Calibration & confidence
 
