@@ -96,3 +96,36 @@ pub fn shadowed_text(ui: &mut egui::Ui, text: &str, color: Color32, size: f32) {
     ui.painter().galley_with_override_text_color(rect.min + SHADOW_OFFSET, galley.clone(), SHADOW);
     ui.painter().galley_with_override_text_color(rect.min, galley, color);
 }
+
+/// Draw `label` followed by `text` on one wrapping line with a drop shadow,
+/// using a separate colour for each part.
+///
+/// Useful for a muted prefix (`"Question: "`) in front of brighter content.
+pub fn shadowed_labelled_text(
+    ui: &mut egui::Ui,
+    label: &str,
+    label_color: Color32,
+    text: &str,
+    text_color: Color32,
+    size: f32,
+) {
+    let font = FontId::proportional(size);
+    let mut job = egui::text::LayoutJob::default();
+    job.wrap.max_width = ui.available_width();
+    job.append(
+        label,
+        0.0,
+        egui::text::TextFormat { font_id: font.clone(), color: label_color, ..Default::default() },
+    );
+    job.append(
+        text,
+        0.0,
+        egui::text::TextFormat { font_id: font, color: text_color, ..Default::default() },
+    );
+
+    let galley = ui.painter().layout_job(job);
+    let (rect, _) = ui.allocate_exact_size(galley.size(), egui::Sense::hover());
+    // Shadow every glyph, then paint the galley with its own per-part colours.
+    ui.painter().galley_with_override_text_color(rect.min + SHADOW_OFFSET, galley.clone(), SHADOW);
+    ui.painter().galley(rect.min, galley, FG0);
+}

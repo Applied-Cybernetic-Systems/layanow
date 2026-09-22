@@ -229,9 +229,11 @@ impl Overlay {
 
     fn draw_capturing(&mut self, ui: &mut egui::Ui) {
         if let Some(question) = self.session.question() {
-            theme::shadowed_text(
+            theme::shadowed_labelled_text(
                 ui,
-                &format!("Question: {}", question.selection.text),
+                "Question: ",
+                theme::FG4,
+                &question.selection.text,
                 theme::BLUE,
                 theme::BODY_SIZE,
             );
@@ -285,9 +287,11 @@ impl Overlay {
                         ui.add_space(RESULTS_LEFT_MARGIN);
                         ui.vertical(|ui| {
                             if let Some(question) = &question {
-                                theme::shadowed_text(
+                                theme::shadowed_labelled_text(
                                     ui,
-                                    &format!("Question: {question}"),
+                                    "Question: ",
+                                    theme::FG4,
+                                    question,
                                     theme::BLUE,
                                     theme::BODY_SIZE,
                                 );
