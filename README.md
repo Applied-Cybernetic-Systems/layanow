@@ -9,7 +9,7 @@ General-purpose ("any text"), Linux/Wayland first.
 ```
 hotkey ─▶ egui overlay ─▶ drag over the question, then each answer ─▶ Enter
                                                                     │
-                                          Laya (ONNX Runtime, int8) ◀┘
+                                          Laya (ONNX Runtime, fp32) ◀┘
                                                                     │
                          coloured probability panel + top pick ◀─────┘
 ```
@@ -48,7 +48,7 @@ cargo run -p layanow-app -- toggle  # show/hide · also: show, hide, quit
 |---|---|
 | `AGENTS.md` | Repo guide for agents: invariants, quality gate, conventions |
 | `PLAN.md` | Scope, UX, Rust workspace, quality gate, milestones |
-| `DECISIONS.md` | Why Rust, why ONNX/int8, egui, resource policy, etc. |
+| `DECISIONS.md` | Why Rust, why ONNX, egui, resource policy, etc. |
 | `FEASIBILITY.md` | Language analysis, ONNX export feasibility, crates, risks |
 | `RESOLVERS.md` | `TextResolver` trait and per-platform backends |
 | `LAYA.md` | ONNX contract, checkpoint export, rendering port, calibration |

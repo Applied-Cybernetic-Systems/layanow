@@ -9,10 +9,10 @@ Decisions live in `DECISIONS.md` as ADRs. This file tracks what is still open.
 | A1 | "3 resolvers" meaning | Text source = **selection only**; 3 = platform backends (ADR-13) |
 | A2 | Wayland capture model | **Click-through** overlay + native selection (ADR-14) |
 | A3 | Overlay freeze | **No freeze**; dim over live content (ADR-25) |
-| A4 | Default checkpoint | **English int8**; multilingual via settings (ADR-16) |
+| A4 | Default checkpoint | **English fp32**; multilingual via settings (ADR-16 superseded by ADR-36) |
 | A5 | MCQ → Laya rendering | `ins` = question, `crit` = letter-labelled answers, `state` = empty/context. **M1 confirmed** on 20 self-made MCQs (context 8/8, empty 5/12, question-in-state 1/12) (ADR-23/28) |
 | A6 | Model acquisition | **Download on first run**, cache + checksums (ADR-17) |
-| A7 | Quantization | **Dynamic int8** default, fp32 fallback/setting. **M1:** multilingual int8 missed the ≥99% agreement bar (70% overall) → multilingual defaults to fp32; int8 opt-in (ADR-24/28) |
+| A7 | Quantization | **fp32** default (English and multilingual); dynamic int8 opt-in via settings (T-114). **M1:** multilingual int8 missed the ≥99% agreement bar (70% overall) (ADR-24/28/36) |
 | A8 | Results display | Same overlay; click dismisses (ADR-15) |
 | A9 | Nothing resolved | Applet popup error (ADR-18) |
 | A10 | Hotkey | User-managed (ADR-19) |

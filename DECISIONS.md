@@ -83,6 +83,9 @@ with a documented soft budget of **≤ 3 GB** RSS. On-demand unload is a setting
 CUDA context and VRAM. No runtime enforcement — documented default only.
 **Consequence:** ORT arena/thread settings are tuned in config; GPU is opt-in.
 
+> **Amended by ADR-36:** the default quantization is **fp32**; dynamic int8 is an
+> opt-in setting.
+
 ## ADR-12 — No SkillsBuild coupling
 **Decision:** Do not special-case IBM SkillsBuild or bundle the old answer bank.
 **Why:** The target is now a general utility; the MISSION.md bank is not an
@@ -118,6 +121,8 @@ Resolve in `OPEN-QUESTIONS.md` (A3b).
 ## ADR-16 — Default checkpoint: English int8, multilingual via settings
 **Decision:** Ship the English checkpoint as the default, int8; expose the
 multilingual checkpoint (and others) through settings (ADR-7).
+
+> **Superseded by ADR-36:** the English default is **fp32**; int8 is opt-in.
 
 ## ADR-17 — Model acquisition: download on first run
 **Decision:** Do not bundle weights. Download the selected checkpoint from
@@ -167,6 +172,10 @@ option and as the fallback if int8 regresses.
 a sample of real inputs; if a labelled sample exists, top-1 accuracy within
 ~1–2 points of fp32.
 
+> **Amended by ADR-28/ADR-36:** int8 is **not** the default for either
+> checkpoint; it is an opt-in setting. The acceptance bar still governs whether
+> it may be offered.
+
 ## ADR-25 — No freeze (A3b)
 **Decision:** The overlay is a transparent/dim **click-through** layer over live
 content. No screenshot freeze.
@@ -211,8 +220,8 @@ head is pruned, ADR-27 C3), and special tokens are read from the checkpoint's
 **Why:** int8 is the resource win but misses the accuracy bar under the default
 (empty-state) rendering; ADR-24 already allows the fp32 fallback.
 **Consequence:** multilingual ships fp32 (still within budget); int8 is offered
-for context-heavy inputs. English keeps its published int8 default (not
-re-checked here). Revisit int8 if static/calibrated quantization is added.
+for context-heavy inputs. English also ships fp32 (ADR-36; not re-checked
+here). Revisit int8 if static/calibrated quantization is added.
 Weights are Convai Innovations' (Apache-2.0); see `bundle::ATTRIBUTION`.
 
 ## ADR-29 — Golden rendering/calibration fixtures are committed (E3)
@@ -382,3 +391,20 @@ tree (`option-ext`/MPL-2.0, the unmaintained `proc-macro-error`).
 `PredefinedMenuItem::quit` renders disabled under the `ksni` bridge, so Quit is
 an ordinary menu item. The `Settings...` entry is deferred to T-113+, and the
 menu does not yet reflect overlay visibility (T-172).
+
+## ADR-36 — English default is fp32; int8 is an opt-in setting
+**Decision:** The default English checkpoint is the shipped **fp32** graph
+(`receptron/laya-onnx`, `Quant::Fp32`) — which is what `main.rs` already loads.
+Dynamic int8 is an **opt-in setting**, not a default; it lands with the settings
+menu (T-113/T-114) and is gated on T-121 confirming it meets ADR-24's accuracy
+bar. This supersedes ADR-16's "English int8" default and amends the int8 default
+in ADR-11 and ADR-24 for English (multilingual was already fp32 per ADR-28).
+**Why:** fp32 is strictly the more accurate graph — quantization only adds error
+(T-120). int8 is the resource win, but fp32 already fits ADR-11's ≤ 3 GB soft
+budget (≈ 2.1 GB vs ≈ 0.7 GB), so there is no budget pressure to accept an
+unverified accuracy loss. The M1 multilingual result (int8 vs fp32 top-1
+agreement 70% overall) shows int8 can change decisions; the English case has not
+been measured (T-121).
+**Consequence:** `AGENTS.md`/`PLAN.md`/`OPEN-QUESTIONS.md`/`LAYA.md` no longer
+describe an English int8 default. `Quant` stays metadata-only until T-114 makes
+it select the graph file.

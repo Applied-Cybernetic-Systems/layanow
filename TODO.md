@@ -28,19 +28,19 @@ agents must update it whenever work is started, finished, or newly discovered.
 
 ### M5 — tray, settings, toggle
 - **T-113** · 2026-09-22 · M5 · app — Checkpoint selector in settings (manual, no auto-routing). (ADR-7/27-C1)
-- **T-114** · 2026-09-22 · M5 · app — int8/fp32 setting; make `Quant` actually select the graph file instead of being metadata. (ADR-7/11/28)
+- **T-114** · 2026-09-22 · M5 · app — int8/fp32 setting; make `Quant` actually select the graph file instead of being metadata. Default stays **fp32**; int8 is opt-in (ADR-36). Lands with the settings menu (T-113). (ADR-7/11/28/36)
 - **T-115** · 2026-09-22 · M5 · app — Confidence threshold setting (default 0.5; warn only, never refuse). (ADR-27-C2)
 - **T-116** · 2026-09-22 · M5 · app — Probability colour settings.
 - **T-117** · 2026-09-22 · M5 · app — Hot vs on-demand model unload setting. (ADR-11)
 - **T-118** · 2026-09-22 · M5 · app — Persist settings to `~/.config/layanow/config.toml` (taplo is in the dev shell). (E5, `OPEN-QUESTIONS.md`)
 
 ### Model
-- **T-120** · 2026-09-22 · model — Resolve the English default mismatch: ADR-16/`PLAN.md`/`AGENTS.md` say int8, but the shipped `receptron/laya-onnx` bundle is **fp32** (`Quant::Fp32`). Either wire an English int8 artifact and make `Quant` functional, or amend ADR-16. **Needs a decision.**
-- **T-121** · 2026-09-22 · model — Confirm int8-vs-fp32 accuracy for the chosen English artifact against ADR-24's bar before defaulting to int8. (ADR-24/28)
+- **T-121** · 2026-09-22 · model — Confirm int8-vs-fp32 accuracy for the chosen English artifact against ADR-24's bar before offering int8 as an opt-in setting. (ADR-24/28/36)
 - **T-122** · 2026-09-22 · model — Checkpoint registry with lazy load + LRU eviction (one session resident); today only `DEFAULT_REPO` is wired and it loads eagerly. (`LAYA.md`)
 - **T-123** · 2026-09-22 · model — Multi-answer (`choice`) support: mark options above a probability threshold. (ADR-8/27-C6)
 - **T-124** · 2026-09-22 · model — Optional checkpoint auto-routing (port Laya's `Router`). (ADR-7, v2+)
 - **T-125** · 2026-09-22 · model — Map `ModelError` variants to actionable, user-facing messages instead of a raw `to_string()` handed to the UI. (ADR-18)
+- **T-173** · 2026-09-22 · model — Align `DEFAULT_REPO` with the consolidated hub: we ship `receptron/laya-onnx`, but Laya now publishes all three checkpoints under `convaiinnovations/laya` (subfolders). Decide whether to switch the default repo/subfolder and update the manifest. (`bundle.rs`, `LAYA.md`)
 
 ### Capture & resolvers
 - **T-130** · 2026-09-22 · resolve — Move the PRIMARY read off the UI thread (blocking `get_contents` currently runs inside `update`; a stalled owner freezes the overlay). (ADR-33)
@@ -113,3 +113,4 @@ _(empty — pick a task from **Open** and move its line here when you start it.)
 - **T-153** · 2026-09-22 · pkg — Enforce a single applet instance. (D4) **Closed:** 2026-09-22 · the control socket is the single-instance lock: bind rejects a live owner and reclaims a stale Unix socket; verified end-to-end (second invocation prints "already running" and exits 0). Shipped in the same commit.
 - **T-170** · 2026-09-22 · docs — Rename the project from `layassist` to `layanow` (crate/package/binary names, `LAYASSIST_*` env vars, `~/.cache/layanow`, socket id, all docs, GitHub repo). **Closed:** 2026-09-22 · renamed the five crates, the binary, the env vars, the cache/socket paths and every doc reference; moved the user's `layanow.png` into `crates/layanow-platform/assets/`; migrated `~/.cache/layassist` → `~/.cache/layanow`; GitHub repo renamed to `Uiyx/layanow`.
 - **T-111** · 2026-09-22 · M5 · app — Tray icon via `tray-icon`, with show/hide, settings, and quit. (ADR-20) **Closed:** 2026-09-22 · `layanow-platform::tray` uses `tray-icon` with the Linux `ksni` (StatusNotifierItem, no GTK) backend; menu `Toggle overlay`/`Quit` plus left-click toggle, posting to the shared `Command` channel (now `crossbeam-channel`); embedded 32x32 `layanow.png`; best-effort startup. Verified the SNI registration over D-Bus (`org.kde.StatusNotifierItem-*`) and clean quit. `Settings…` deferred to T-171. Shipped in the `feat(app): system tray with toggle and quit (T-111)` commit (ADR-35).
+- **T-120** · 2026-09-22 · model — Resolve the English default mismatch: ADR-16/`PLAN.md`/`AGENTS.md` say int8, but the shipped `receptron/laya-onnx` bundle is **fp32** (`Quant::Fp32`). Either wire an English int8 artifact and make `Quant` functional, or amend ADR-16. **Needs a decision.** **Closed:** 2026-09-22 · decision: English default stays **fp32** (the shipped artifact); dynamic int8 becomes an **opt-in setting** when the settings menu lands (T-113/T-114), gated on T-121. Amended ADR-11/16/24 and added ADR-36; updated `AGENTS.md`/`PLAN.md`/`OPEN-QUESTIONS.md`/`README.md`/`LAYA.md`.

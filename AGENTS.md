@@ -39,9 +39,9 @@ Docs: `PLAN.md`, `DECISIONS.md` (ADRs), `FEASIBILITY.md`, `RESOLVERS.md`,
 5. **Single-answer `choice` only** in v1 (ADR-8). Keep the data model
    list-shaped so multi-answer can be added.
 6. **No SkillsBuild coupling** and no bundled answer bank (ADR-12).
-7. Default resource profile: **hot, int8, CPU-only**, documented soft budget
-   **≤ 3 GB** (ADR-11). No runtime enforcement. *(The shipped English bundle is
-   currently fp32 — tracked as `TODO.md` T-120.)*
+7. Default resource profile: **hot, fp32 (English), CPU-only**, documented soft
+   budget **≤ 3 GB** (ADR-11/36). No runtime enforcement. Dynamic int8 is an
+   opt-in setting (ADR-36, T-114).
 8. `unsafe` code only in `layanow-platform`, isolated and documented.
 
 ## Work tracking (`TODO.md`)

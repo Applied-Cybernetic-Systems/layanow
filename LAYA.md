@@ -20,7 +20,7 @@ Each checkpoint ships its own `encoder/`, `tokenizer/`, `model.safetensors`, and
 `rl_agent_config.json`. One checkpoint is resident (ADR-11); choice is a settings
 toggle (ADR-7). The shipped default is the published English **fp32** bundle
 (`receptron/laya-onnx`); multilingual and dynamic int8 graphs are build-time
-exports, with int8 an opt-in setting (ADR-28).
+exports, with int8 an opt-in setting (ADR-28/36).
 
 ## ONNX graph contract
 
@@ -121,9 +121,8 @@ context-bearing inputs but 50% on state-less inputs (70% overall)** — below th
 ≥ 99% bar. `per_channel=True` was much worse (27%); MatMul-only 73%. Peak RSS
 (ORT session, debug process): fp32 ≈ 2.1 GB, int8 ≈ 0.7 GB. **Therefore the
 multilingual checkpoint defaults to fp32** (ADR-28), with int8 an opt-in
-setting. The shipped English bundle (`receptron/laya-onnx`) is also fp32;
-ADR-16 calls for an English int8 default, which is not wired yet (see
-`OPEN-QUESTIONS.md` A4).
+setting. The shipped English bundle (`receptron/laya-onnx`) is also fp32 and is
+the default; ADR-36 makes int8 opt-in there too (T-114).
 
 ## Calibration & confidence
 
@@ -192,4 +191,4 @@ struct Checkpoint {
 
 No SkillsBuild/answer-bank coupling (ADR-12). For the M1 spike, evaluate on a
 small neutral, self-made MCQ sample (and/or the model's own reference parity
-check) to confirm int8 accuracy before defaulting to it.
+check) to confirm int8 accuracy before offering it as an opt-in setting.

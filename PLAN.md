@@ -13,9 +13,9 @@ General-purpose ("any text"), with Linux (Wayland + X11) first.
 
 ### v1 (Linux)
 - Resident **tray applet** (no separate daemon) written in Rust.
-- **Laya via ONNX Runtime** (`ort`), **English int8** by default (multilingual
-  via settings), **CPU-only**, **hot** resident model (soft budget ≤ 3 GB,
-  ADR-11/16).
+- **Laya via ONNX Runtime** (`ort`), **English fp32** by default (multilingual
+  and int8 via settings), **CPU-only**, **hot** resident model (soft budget
+  ≤ 3 GB, ADR-11/36).
 - Hotkey → full-screen **egui overlay**. The overlay is **click-through** and
   never captures the pointer (ADR-14): the user selects text natively in the
   target app, and each selection becomes an item (first = question, rest =
@@ -55,7 +55,7 @@ Data flow:
 native selection (click-through overlay) ─▶ TextResolver.resolve_current_selection()
                                         │
                                         ▼
-                       ModelRegistry.decide(question, answers)   (ort, int8)
+                       ModelRegistry.decide(question, answers)   (ort, fp32)
                                         │
                                         ▼
                        ranked probabilities ─▶ egui results panel
