@@ -7,7 +7,11 @@
     clippy::cast_possible_truncation,
     clippy::cast_precision_loss,
     clippy::cast_sign_loss,
-    clippy::too_many_lines
+    clippy::too_many_lines,
+    // `Host` is an event-loop state bag; its flags (pointer captured, visible,
+    // pending blank, exit) are independent, so a state machine would not
+    // simplify it.
+    clippy::struct_excessive_bools
 )]
 
 use std::num::NonZeroU32;
@@ -104,6 +108,7 @@ pub fn run(app: impl OverlayApp + 'static) -> Result<(), OverlayError> {
         // region (click-through, ADR-14).
         pointer_captured: true,
         visible: false,
+        needs_clear: false,
         width: 0,
         height: 0,
         gl: None,
@@ -126,12 +131,14 @@ pub fn run(app: impl OverlayApp + 'static) -> Result<(), OverlayError> {
         if host.exit || host.app.should_exit() {
             break;
         }
-        if host.app.visible()
-            && host.dirty.swap(false, Ordering::Relaxed)
-            && host.width > 0
-            && host.height > 0
-        {
+        let sized = host.width > 0 && host.height > 0;
+        if host.app.visible() && sized && host.dirty.swap(false, Ordering::Relaxed) {
             host.render()?;
+        } else if host.needs_clear && sized {
+            // Hiding keeps the surface mapped but blanks it (see
+            // `render_clear`).
+            host.render_clear()?;
+            host.needs_clear = false;
         }
 
         // Wake at least every `POLL_MILLIS` so repaint requests are serviced.
@@ -182,6 +189,7 @@ struct Host {
     dirty: Arc<AtomicBool>,
     pointer_captured: bool,
     visible: bool,
+    needs_clear: bool,
     width: u32,
     height: u32,
     gl: Option<Gl>,
@@ -276,9 +284,29 @@ impl Host {
         Ok(())
     }
 
+    /// Present a fully transparent frame.
+    ///
+    /// Used when hiding: the surface stays **mapped** but its last UI frame is
+    /// cleared. Unmapping (detaching the buffer) makes the compositor treat the
+    /// layer surface as unconfigured, so a later `set_keyboard_interactivity`
+    /// fails with "layer_surface has never been configured" (T-174).
+    fn render_clear(&mut self) -> Result<(), OverlayError> {
+        if let Some(gl) = &mut self.gl {
+            gl.painter.clear([self.width, self.height], [0.0, 0.0, 0.0, 0.0]);
+            gl.surface
+                .swap_buffers(&gl.context)
+                .map_err(|error| OverlayError::Gl(error.to_string()))?;
+        }
+        Ok(())
+    }
+
     /// Mirror [`OverlayApp::visible`] onto the layer surface: the keyboard is
-    /// grabbed (and the surface mapped) only while shown (ADR-34).
+    /// grabbed only while shown (ADR-34). The surface stays mapped either way.
     fn apply_visibility(&mut self) {
+        // Layer-surface setters are only valid once the surface is configured.
+        if self.width == 0 || self.height == 0 {
+            return;
+        }
         let visible = self.app.visible();
         if visible == self.visible {
             return;
@@ -289,11 +317,10 @@ impl Host {
         } else {
             KeyboardInteractivity::None
         });
-        if !visible {
-            // Detach the buffer so the last frame does not linger on screen.
-            self.layer.attach(None, 0, 0);
-        }
         self.layer.wl_surface().commit();
+        // On hide, blank the surface on the next frame; on show, cancel a
+        // pending blank.
+        self.needs_clear = !visible;
         self.dirty.store(true, Ordering::Relaxed);
     }
 

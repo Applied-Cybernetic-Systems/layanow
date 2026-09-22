@@ -346,9 +346,11 @@ channel to the app.
 The overlay now starts **hidden**: no buffer is attached and the layer
 surface uses `KeyboardInteractivity::None` with an empty input region.
 `OverlayApp` gains `poll()` (process non-frame events on every host tick, even
-while hidden) and `visible()`. On show the host maps the surface and switches to
-`KeyboardInteractivity::Exclusive`; on hide it detaches the buffer and returns
-to `None`, so the keyboard is never grabbed while the applet is hidden. `Esc`
+while hidden) and `visible()`. On show the host takes
+`KeyboardInteractivity::Exclusive`; on hide it blanks the surface to transparent
+and returns to `None` while keeping the surface mapped (unmapping would leave it
+unconfigured and break the next show, T-174), so the keyboard is never grabbed
+while the applet is hidden. `Esc`
 now **hides** the overlay (revising ADR-33's "quits when nothing is captured");
 quitting is `layanow quit` (the tray in T-111 will add a direct control).
 

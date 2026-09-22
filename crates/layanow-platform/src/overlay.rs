@@ -12,8 +12,10 @@
 //! interactivity is `None`, so it never grabs the keyboard until it is shown
 //! (ADR-34). While hidden the input region stays empty, so the pointer passes
 //! through to the application underneath (ADR-14). When
-//! [`OverlayApp::visible`](crate::overlay::OverlayApp::visible) becomes true the
-//! surface is mapped and takes exclusive keyboard interactivity (ADR-26); when
+//! [`OverlayApp::visible`](crate::overlay::OverlayApp::visible) becomes true it
+//! takes exclusive keyboard interactivity (ADR-26); hiding it again blanks the
+//! surface to transparent while keeping it mapped (unmapping would leave the
+//! layer surface unconfigured and break the next show, T-174). When
 //! [`OverlayApp::wants_pointer`](crate::overlay::OverlayApp::wants_pointer) is
 //! true the input region is restored so a click can dismiss the results
 //! (ADR-15).
