@@ -54,7 +54,7 @@ impl Decider {
         let criteria: Vec<(String, String)> = answers
             .iter()
             .enumerate()
-            .map(|(index, answer)| (option_label(index), answer.clone()))
+            .map(|(index, answer)| (render::option_label(index), answer.clone()))
             .collect();
         let options = render::render_choice_options(&criteria);
 
@@ -179,14 +179,6 @@ fn require_id(tokenizer: &Tokenizer, token: &str) -> Result<i64, ModelError> {
         .ok_or_else(|| ModelError::MissingSpecialToken(token.to_string()))
 }
 
-/// `A`, `B`, … for the first 26 answers; `27`, `28`, … beyond that.
-fn option_label(index: usize) -> String {
-    match u8::try_from(index) {
-        Ok(value) if value < 26 => char::from(b'A' + value).to_string(),
-        _ => index.saturating_add(1).to_string(),
-    }
-}
-
 fn intra_threads() -> usize {
     non_empty_env("LAYASSIST_INTRA_OP_THREADS")
         .and_then(|value| value.parse::<usize>().ok())
@@ -214,12 +206,5 @@ mod tests {
         assert_eq!(token_string(config, "mask_token", "?"), "<mask>");
         assert_eq!(token_string(config, "pad_token", "[PAD]"), "[PAD]");
         assert_eq!(token_string(None, "cls_token", "[CLS]"), "[CLS]");
-    }
-
-    #[test]
-    fn option_labels_are_letters_then_numbers() {
-        assert_eq!(option_label(0), "A");
-        assert_eq!(option_label(25), "Z");
-        assert_eq!(option_label(26), "27");
     }
 }

@@ -59,6 +59,19 @@ pub fn render_choice_options(criteria: &[(String, String)]) -> Vec<String> {
         .collect()
 }
 
+/// `A`, `B`, … for the first 26 options; `27`, `28`, … beyond that.
+///
+/// This is the label Laya sees for the option at `index` (see
+/// [`render_choice_options`]); the UI uses it to tie a ranked answer back to the
+/// captured text.
+#[must_use]
+pub fn option_label(index: usize) -> String {
+    match u8::try_from(index) {
+        Ok(value) if value < 26 => char::from(b'A' + value).to_string(),
+        _ => index.saturating_add(1).to_string(),
+    }
+}
+
 /// Build the model input sequence for one typed question.
 ///
 /// Layout (matching `rl_common.build_sequence`):
@@ -226,6 +239,13 @@ mod tests {
         let criteria =
             vec![("A".to_string(), "first".to_string()), ("B".to_string(), String::new())];
         assert_eq!(render_choice_options(&criteria), ["A: first", "B"]);
+    }
+
+    #[test]
+    fn option_labels_are_letters_then_numbers() {
+        assert_eq!(option_label(0), "A");
+        assert_eq!(option_label(25), "Z");
+        assert_eq!(option_label(26), "27");
     }
 
     #[test]
