@@ -12,7 +12,14 @@ version = 2
 # only as unmaintained (RUSTSEC-2024-0436), not vulnerable, and currently has no
 # compatible replacement adopted upstream — re-evaluate when `tokenizers` drops
 # or replaces it.
-ignore = ["RUSTSEC-2024-0436"]
+ignore = [
+    "RUSTSEC-2024-0436",
+    # `ttf-parser` is pulled in by `egui`/`epaint` (via `ab_glyph`) to parse the
+    # bundled fonts. Flagged unmaintained only (RUSTSEC-2026-0192); the
+    # suggested replacement (`skrifa`) is not yet adopted by epaint, and no
+    # fixed version exists. Re-evaluate when epaint moves off `ab_glyph`.
+    "RUSTSEC-2026-0192",
+]
 
 [licenses]
 version = 2
@@ -29,6 +36,12 @@ allow = [
     "MPL-2.0",
     # Root-certificate data bundled by `webpki-roots` (via `ureq`/`rustls`).
     "CDLA-Permissive-2.0",
+    # Boost licence: `error-code`/`clipboard-win` (Windows clipboard, via
+    # `arboard` -> `egui-winit`).
+    "BSL-1.0",
+    # Bundled fonts shipped by `epaint_default_fonts` (egui's `default_fonts`).
+    "OFL-1.1",
+    "Ubuntu-font-1.0",
 ]
 
 [bans]

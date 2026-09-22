@@ -110,7 +110,7 @@ native selection (click-through overlay) ─▶ TextResolver.resolve_current_sel
 | M0 | Rust workspace + flake + CI quality gate + `ort` smoke test on `receptron/laya-onnx` |
 | M1 | **Export spike** (done): multilingual → ONNX (parity 8.6e-6) + int8; int8 missed ADR-24's bar → multilingual defaults to fp32; RAM fp32 ≈2.1 GB / int8 ≈0.7 GB; A5/A7 settled (ADR-28) |
 | M2 | **`layassist-model`** (done): tokenizer + rendering + calibration port; golden tests vs `rl_common.py` (ADR-29) |
-| M3 | Click-through overlay + item model + results panel (selection resolver stub) |
+| M3 | **Click-through overlay + item model + results panel** (in progress): `Session` model, resolver stub, inference worker, results panel, and an eframe/glow overlay; Wayland layer-shell keyboard/click-through + the platform resolver land in M4 (ADR-30) |
 | M4 | Linux selection backends: Wayland PRIMARY (`wl-clipboard-rs`) + X11 (`x11rb`) |
 | M5 | Tray (`tray-icon`) + settings (checkpoint, confidence, colours, hot/unload); `layassist toggle` |
 | M6 | Polish: no-clipboard-clobber guarantees, error popup, history, docs |

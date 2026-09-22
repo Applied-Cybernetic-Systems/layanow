@@ -2,8 +2,9 @@
 //!
 //! Per ADR-1 the model runs on a dedicated thread and the UI talks to it over
 //! channels, so the overlay never blocks on a decision. The worker owns the
-//! [`DecisionEngine`] (in production a [`layassist_model::Decider`]) and answers
-//! one [`Request`] at a time.
+//! [`DecisionEngine`](crate::worker::DecisionEngine) (in production a
+//! [`layassist_model::Decider`]) and answers one
+//! [`Request`](crate::worker::Request) at a time.
 
 use std::sync::mpsc::{self, Receiver, Sender};
 use std::thread::{self, JoinHandle};

@@ -1,0 +1,345 @@
+//! The full-screen overlay: capture items, run a decision, show results.
+//!
+//! Per ADR-14/25 the layer is transparent and **click-through** (the pointer
+//! passes to the app underneath) while it keeps **keyboard interactivity**
+//! (ADR-26). Results are dismissed with a click (ADR-15), at which point the
+//! layer briefly takes the pointer so the click is seen.
+//!
+//! M3 has no platform selection resolver yet (M4): a text field stands in, and
+//! its committed entries are fed through
+//! [`StubResolver`](layassist_resolvers::StubResolver) exactly like a real
+//! auto-captured selection. The field is auto-focused so it works without the
+//! pointer.
+
+use eframe::egui;
+
+use layassist_core::Session;
+use layassist_resolvers::{StubResolver, TextResolver};
+
+use crate::results::{self, DEFAULT_CONFIDENCE_THRESHOLD, Results};
+use crate::worker::{Response, Worker};
+
+/// Accent for the question item.
+const QUESTION_COLOUR: egui::Color32 = egui::Color32::from_rgb(120, 170, 255);
+/// Accent for answer items.
+const ANSWER_COLOUR: egui::Color32 = egui::Color32::from_rgb(120, 220, 150);
+/// Accent for a low-confidence warning.
+const WARNING_COLOUR: egui::Color32 = egui::Color32::from_rgb(235, 190, 80);
+/// Accent for errors.
+const ERROR_COLOUR: egui::Color32 = egui::Color32::from_rgb(235, 100, 90);
+
+/// The overlay's current phase.
+#[derive(Debug)]
+enum Phase {
+    /// Capturing items; `Enter` runs the decision.
+    Capturing,
+    /// A decision is running on the worker thread.
+    Running,
+    /// Ranked results are displayed.
+    Results(Box<Results>),
+    /// The last decision failed; the string is user-facing.
+    Error(String),
+}
+
+/// The egui application behind the overlay.
+pub struct Overlay {
+    session: Session,
+    resolver: StubResolver,
+    worker: Worker,
+    phase: Phase,
+    entry: String,
+    threshold: f32,
+}
+
+impl Overlay {
+    /// Create the overlay driving `worker`.
+    #[must_use]
+    pub fn new(worker: Worker) -> Self {
+        Self {
+            session: Session::new(),
+            resolver: StubResolver::new(),
+            worker,
+            phase: Phase::Capturing,
+            entry: String::new(),
+            threshold: DEFAULT_CONFIDENCE_THRESHOLD,
+        }
+    }
+
+    /// Drain resolved selections into the session (auto-capture, ADR-26).
+    fn capture(&mut self) {
+        while let Ok(Some(selection)) = self.resolver.resolve_current_selection() {
+            self.session.push(selection);
+        }
+    }
+
+    /// Queue the manual entry as a selection.
+    ///
+    /// This is the M3 stand-in for the platform selection resolver (M4).
+    fn commit_entry(&mut self) {
+        let text = self.entry.trim().to_string();
+        if !text.is_empty() {
+            self.resolver.queue(text);
+            self.entry.clear();
+            self.capture();
+        }
+    }
+
+    /// Run a decision if enough has been captured and nothing is in flight.
+    fn decide(&mut self) {
+        if matches!(self.phase, Phase::Running) || !self.session.is_ready() {
+            return;
+        }
+        let Some(question) = self.session.question_text().map(str::to_string) else {
+            return;
+        };
+        let answers = self.session.answer_texts();
+        self.phase = match self.worker.decide(question, answers) {
+            Ok(()) => Phase::Running,
+            Err(error) => Phase::Error(error.to_string()),
+        };
+    }
+
+    /// Take the worker's reply, if any.
+    fn poll(&mut self) {
+        if let Some(response) = self.worker.try_recv() {
+            self.phase = match response {
+                Response::Ranked(ranked) => {
+                    Phase::Results(Box::new(results::results(&ranked, self.threshold)))
+                }
+                Response::Failed(error) => Phase::Error(error),
+            };
+        }
+    }
+
+    /// Clear everything and return to capturing (`Esc`, or a click on results).
+    fn dismiss(&mut self) {
+        self.phase = Phase::Capturing;
+        self.session.clear();
+        self.entry.clear();
+    }
+
+    fn draw_results(ui: &mut egui::Ui, panel: &Results) {
+        for row in &panel.rows {
+            ui.horizontal(|ui| {
+                ui.label(egui::RichText::new(&row.label).strong());
+                ui.add(
+                    egui::ProgressBar::new(row.probability)
+                        .desired_width(260.0)
+                        .fill(egui::Color32::from_rgb(row.colour[0], row.colour[1], row.colour[2]))
+                        .text(format!("{:>5.1}%", row.probability * 100.0)),
+                );
+                let mut text = egui::RichText::new(&row.text);
+                if row.is_top {
+                    text = text.strong();
+                }
+                ui.label(text);
+            });
+        }
+        if panel.low_confidence {
+            ui.colored_label(
+                WARNING_COLOUR,
+                format!("low confidence ({:.0}%)", panel.confidence * 100.0),
+            );
+        }
+    }
+
+    fn draw(&mut self, ui: &mut egui::Ui) {
+        ui.vertical_centered(|ui| {
+            ui.add_space(48.0);
+            ui.heading("layassist");
+            ui.add_space(8.0);
+            match &self.phase {
+                Phase::Capturing => {
+                    if let Some(question) = self.session.question() {
+                        ui.colored_label(
+                            QUESTION_COLOUR,
+                            format!("Question: {}", question.selection.text),
+                        );
+                    } else {
+                        ui.label("Select the question text…");
+                    }
+                    for (index, answer) in self.session.answers().iter().enumerate() {
+                        ui.colored_label(
+                            ANSWER_COLOUR,
+                            format!("Answer {}: {}", index + 1, answer.selection.text),
+                        );
+                    }
+                    ui.add_space(12.0);
+                    let response = ui.add(
+                        egui::TextEdit::singleline(&mut self.entry)
+                            .hint_text("type an item, then press Tab to capture (M3 stub)")
+                            .desired_width(480.0),
+                    );
+                    response.request_focus();
+                    ui.label("Tab: capture item · Enter: decide · Esc: cancel");
+                }
+                Phase::Running => {
+                    ui.spinner();
+                    ui.label("Deciding…");
+                }
+                Phase::Results(panel) => {
+                    Self::draw_results(ui, panel);
+                    ui.add_space(8.0);
+                    ui.label("click or Esc: dismiss");
+                }
+                Phase::Error(error) => {
+                    ui.colored_label(ERROR_COLOUR, format!("error: {error}"));
+                    ui.label("Esc: dismiss");
+                }
+            }
+        });
+    }
+}
+
+impl eframe::App for Overlay {
+    fn clear_color(&self, _visuals: &egui::Visuals) -> [f32; 4] {
+        // Fully transparent; the dim comes from the panel fill below.
+        [0.0, 0.0, 0.0, 0.0]
+    }
+
+    fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        self.poll();
+        self.capture();
+
+        let showing_results = matches!(self.phase, Phase::Results(_));
+
+        if ctx.input_mut(|input| input.consume_key(egui::Modifiers::NONE, egui::Key::Tab)) {
+            self.commit_entry();
+        }
+        if ctx.input(|input| input.key_pressed(egui::Key::Enter)) {
+            self.decide();
+        }
+        if ctx.input(|input| input.key_pressed(egui::Key::Escape)) {
+            self.dismiss();
+        }
+        if showing_results && ctx.input(|input| input.pointer.any_click()) {
+            self.dismiss();
+        }
+
+        // Click-through while capturing (ADR-14); take the pointer only to see
+        // the dismissing click once results are shown (ADR-15).
+        ctx.send_viewport_cmd(egui::ViewportCommand::MousePassthrough(!showing_results));
+
+        egui::CentralPanel::default()
+            .frame(egui::Frame::NONE.fill(egui::Color32::from_black_alpha(60)))
+            .show(ctx, |ui| self.draw(ui));
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::worker::DecisionEngine;
+    use layassist_model::RankedAnswer;
+
+    /// An engine that ranks the first answer highest.
+    struct FirstWins;
+
+    impl DecisionEngine for FirstWins {
+        fn decide_choice(
+            &mut self,
+            _question: &str,
+            answers: &[String],
+        ) -> Result<Vec<RankedAnswer>, String> {
+            let mut ranked: Vec<RankedAnswer> = answers
+                .iter()
+                .enumerate()
+                .map(|(index, text)| RankedAnswer {
+                    index,
+                    text: text.clone(),
+                    probability: if index == 0 { 0.8 } else { 0.2 },
+                    confidence: 0.6,
+                })
+                .collect();
+            ranked.sort_by(|a, b| b.probability.total_cmp(&a.probability));
+            Ok(ranked)
+        }
+    }
+
+    fn overlay() -> Overlay {
+        Overlay::new(Worker::spawn(FirstWins))
+    }
+
+    /// Poll until the worker replies, mirroring the per-frame `update` loop.
+    fn wait_for_reply(overlay: &mut Overlay) {
+        for _ in 0..1000 {
+            overlay.poll();
+            if !matches!(overlay.phase, Phase::Running) {
+                return;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(1));
+        }
+        panic!("the worker did not reply");
+    }
+
+    #[test]
+    fn committing_entries_builds_a_session() {
+        let mut overlay = overlay();
+        overlay.entry = "Which planet?".to_string();
+        overlay.commit_entry();
+        overlay.entry = "Mars".to_string();
+        overlay.commit_entry();
+        assert_eq!(overlay.session.question_text(), Some("Which planet?"));
+        assert_eq!(overlay.session.answer_texts(), ["Mars"]);
+        assert!(overlay.entry.is_empty());
+    }
+
+    #[test]
+    fn decide_without_answers_stays_capturing() {
+        let mut overlay = overlay();
+        overlay.entry = "question only".to_string();
+        overlay.commit_entry();
+        overlay.decide();
+        assert!(matches!(overlay.phase, Phase::Capturing));
+    }
+
+    #[test]
+    fn decide_then_poll_yields_results() {
+        let mut overlay = overlay();
+        for text in ["Which planet?", "Mars", "Venus"] {
+            overlay.entry = text.to_string();
+            overlay.commit_entry();
+        }
+        overlay.decide();
+        assert!(matches!(overlay.phase, Phase::Running));
+
+        wait_for_reply(&mut overlay);
+        let Phase::Results(panel) = &overlay.phase else {
+            panic!("expected results");
+        };
+        assert_eq!(panel.rows[0].text, "Mars");
+        assert!(panel.rows[0].is_top);
+    }
+
+    #[test]
+    fn dismiss_clears_the_session() {
+        let mut overlay = overlay();
+        overlay.entry = "q".to_string();
+        overlay.commit_entry();
+        overlay.dismiss();
+        assert!(overlay.session.is_empty());
+        assert!(matches!(overlay.phase, Phase::Capturing));
+    }
+
+    #[test]
+    fn a_failing_engine_becomes_an_error_phase() {
+        struct Broken;
+        impl DecisionEngine for Broken {
+            fn decide_choice(
+                &mut self,
+                _q: &str,
+                _a: &[String],
+            ) -> Result<Vec<RankedAnswer>, String> {
+                Err("no model".to_string())
+            }
+        }
+        let mut overlay = Overlay::new(Worker::spawn(Broken));
+        for text in ["q", "a"] {
+            overlay.entry = text.to_string();
+            overlay.commit_entry();
+        }
+        overlay.decide();
+        wait_for_reply(&mut overlay);
+        assert!(matches!(overlay.phase, Phase::Error(ref error) if error == "no model"));
+    }
+}

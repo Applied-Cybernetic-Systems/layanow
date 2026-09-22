@@ -2,7 +2,7 @@
 //! low-confidence flag.
 //!
 //! Kept free of `egui` so the presentation rules are unit-tested without a
-//! window. The overlay (`app`) turns [`Results`] into widgets.
+//! window. The overlay turns [`Results`](crate::results::Results) into widgets.
 
 use layassist_model::RankedAnswer;
 use layassist_model::render::option_label;

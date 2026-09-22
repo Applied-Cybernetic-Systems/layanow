@@ -232,3 +232,23 @@ generated fixture pins the reference behaviour in a few tens of KiB.
 regenerating and reviewing the fixture; an accidental divergence fails
 `cargo test`. The generator is a dev-shell tool only (it needs the M1 export or
 a cached tokenizer), never a runtime dependency.
+
+## ADR-30 — M3 overlay: eframe/glow, mouse passthrough, manual-capture stub
+**Decision:** The overlay is an `eframe`/`egui` window (ADR-10) using the
+`glow` (OpenGL) renderer, pinned to `eframe` 0.32 — the newest release that
+still honours the workspace MSRV of 1.85 (E8); 0.36 requires Rust 1.95. The
+window is transparent, undecorated, always-on-top, fullscreen, and
+`MousePassthrough` is **on while capturing** (ADR-14) and **off only while
+results are shown**, so the dismissing click can be seen (ADR-15). Until the
+platform selection resolver lands (M4), a single-line text field auto-focuses
+and `Tab` commits its contents through `StubResolver` — the same path a real
+auto-captured selection takes — so the capture/decide/results flow is testable
+without the OS selection buffer. `Enter` decides, `Esc` cancels, a click
+dismisses.
+**Why:** This delivers the M3 item model, results panel, and inference wiring
+while respecting the click-through invariant. `glow` avoids the `wgpu` tree.
+**Consequence / open:** true Wayland layer-shell *keyboard interactivity* and
+click-through (ADR-26) are not yet wired — eframe's winit window relies on X11
+focus for keys — so the overlay is compile- and unit-tested but not yet
+visually verified; that, and removing the `Tab`-capture stub, is M4 work. The
+"take the pointer to dismiss results" interpretation of ADR-15 is provisional.

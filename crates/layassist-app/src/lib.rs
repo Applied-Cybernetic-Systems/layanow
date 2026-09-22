@@ -9,3 +9,6 @@
 pub mod results;
 /// The dedicated inference worker (ADR-1).
 pub mod worker;
+
+/// The full-screen, click-through overlay (ADR-14/25/26).
+pub mod overlay;

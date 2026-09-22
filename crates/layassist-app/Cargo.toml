@@ -15,6 +15,16 @@ layassist-core = { path = "../layassist-core" }
 layassist-model = { path = "../layassist-model" }
 layassist-platform = { path = "../layassist-platform" }
 layassist-resolvers = { path = "../layassist-resolvers" }
+# Overlay + settings UI (ADR-10). `glow` (OpenGL) rather than `wgpu` keeps the
+# dependency tree and startup cost small; Wayland + X11 are both enabled
+# (ADR-21). Version 0.32 is the newest that still honours the workspace MSRV
+# (E8); bump together with `rust-version`.
+eframe = { version = "0.32", default-features = false, features = [
+    "default_fonts",
+    "glow",
+    "wayland",
+    "x11",
+] }
 
 [lints]
 workspace = true
