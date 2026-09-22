@@ -106,6 +106,7 @@ pub fn run(app: impl OverlayApp + 'static) -> Result<(), OverlayError> {
         gl: None,
         exit: false,
     };
+    host.app.configure(&host.egui_ctx);
 
     loop {
         event_queue.flush().map_err(|error| OverlayError::Wayland(error.to_string()))?;

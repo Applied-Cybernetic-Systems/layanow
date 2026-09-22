@@ -278,3 +278,19 @@ libraries load at runtime.
 `OverlayError::Unsupported` elsewhere, and the Wayland deps are `cfg`-gated to
 Linux. Verified to map a 1920x1200 layer surface and initialise GL on MangoWC;
 the `Tab`-to-capture stub still stands in until the M4 selection backends.
+
+## ADR-32 — Overlay theme: gruvbox medium contrast, shadowed bright text
+**Decision:** The overlay uses the gruvbox "medium" contrast palette
+(`bg0 = #282828`, `fg0 = #fbf1c7`), installed into egui's visuals by
+`layassist-app::theme`. Primary text is `fg0` (the brightest foreground) and is
+drawn with a soft drop shadow (black at ~78% opacity, offset 1.5 pt) so it stays
+legible over arbitrary desktop content; question/answer accents are gruvbox
+`blue`/`green`, warnings `yellow`, errors `red`. The probability bars run
+gruvbox red → orange → green.
+**Why:** The overlay floats over unpredictable content; a bright, shadowed
+foreground and one coherent theme improve legibility. egui has no text-shadow
+option, so `theme::shadowed_text` lays the galley out once and paints it twice
+(shadow, then text).
+**Consequence:** UI colours live in `theme`; `results::probability_colour`
+mirrors the same gruvbox anchors and stays `egui`-free. Palette changes are a
+one-file edit.

@@ -56,16 +56,19 @@ pub fn results(ranked: &[RankedAnswer], threshold: f32) -> Results {
     Results { rows, confidence, low_confidence: confidence < threshold }
 }
 
-/// Map a probability to an RGB colour: red at 0, amber at 0.5, green at 1.
+/// Map a probability to an RGB colour: gruvbox red at 0, orange at 0.5, green
+/// at 1 (the medium-contrast accents).
 ///
 /// A purely visual cue; the numeric percentage is always shown alongside.
 #[must_use]
 pub fn probability_colour(probability: f32) -> [u8; 3] {
     let probability = probability.clamp(0.0, 1.0);
     if probability < 0.5 {
-        lerp([220, 60, 50], [230, 180, 40], probability * 2.0)
+        // red (#fb4934) -> orange (#fe8019)
+        lerp([0xfb, 0x49, 0x34], [0xfe, 0x80, 0x19], probability * 2.0)
     } else {
-        lerp([230, 180, 40], [60, 180, 90], (probability - 0.5) * 2.0)
+        // orange (#fe8019) -> green (#b8bb26)
+        lerp([0xfe, 0x80, 0x19], [0xb8, 0xbb, 0x26], (probability - 0.5) * 2.0)
     }
 }
 
@@ -125,7 +128,7 @@ mod tests {
             [0.0, 0.25, 0.5, 0.75, 1.0].iter().map(|&p| probability_colour(p)).collect();
         assert!(samples.windows(2).all(|pair| pair[0][1] <= pair[1][1]));
         let mid = probability_colour(0.5);
-        assert!(mid[0] > 200 && mid[1] > 150, "midpoint should be amber");
+        assert!(mid[0] > 200 && mid[1] > 100, "midpoint should be orange");
     }
 
     #[test]

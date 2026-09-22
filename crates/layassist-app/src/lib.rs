@@ -12,3 +12,6 @@ pub mod worker;
 
 /// The full-screen, click-through overlay (ADR-14/25/26).
 pub mod overlay;
+
+/// Gruvbox (medium contrast) theme and shadowed text.
+pub mod theme;

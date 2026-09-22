@@ -19,6 +19,9 @@ use egui::Context;
 
 /// The UI drawn by the overlay host.
 pub trait OverlayApp {
+    /// Called once before the first frame, e.g. to install a theme.
+    fn configure(&mut self, _ctx: &Context) {}
+
     /// Draw one frame.
     fn update(&mut self, ctx: &Context);
 

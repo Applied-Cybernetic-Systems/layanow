@@ -21,16 +21,8 @@ use layassist_platform::overlay::OverlayApp;
 use layassist_resolvers::{StubResolver, TextResolver};
 
 use crate::results::{self, DEFAULT_CONFIDENCE_THRESHOLD, Results};
+use crate::theme;
 use crate::worker::{Response, Worker};
-
-/// Accent for the question item.
-const QUESTION_COLOUR: egui::Color32 = egui::Color32::from_rgb(120, 170, 255);
-/// Accent for answer items.
-const ANSWER_COLOUR: egui::Color32 = egui::Color32::from_rgb(120, 220, 150);
-/// Accent for a low-confidence warning.
-const WARNING_COLOUR: egui::Color32 = egui::Color32::from_rgb(235, 190, 80);
-/// Accent for errors.
-const ERROR_COLOUR: egui::Color32 = egui::Color32::from_rgb(235, 100, 90);
 
 /// The overlay's current phase.
 #[derive(Debug)]
@@ -127,24 +119,23 @@ impl Overlay {
     fn draw_results(ui: &mut egui::Ui, panel: &Results) {
         for row in &panel.rows {
             ui.horizontal(|ui| {
-                ui.label(egui::RichText::new(&row.label).strong());
+                theme::shadowed_text(ui, &row.label, theme::FG0, theme::BODY_SIZE);
                 ui.add(
                     egui::ProgressBar::new(row.probability)
                         .desired_width(260.0)
                         .fill(egui::Color32::from_rgb(row.colour[0], row.colour[1], row.colour[2]))
                         .text(format!("{:>5.1}%", row.probability * 100.0)),
                 );
-                let mut text = egui::RichText::new(&row.text);
-                if row.is_top {
-                    text = text.strong();
-                }
-                ui.label(text);
+                let color = if row.is_top { theme::FG0 } else { theme::FG1 };
+                theme::shadowed_text(ui, &row.text, color, theme::BODY_SIZE);
             });
         }
         if panel.low_confidence {
-            ui.colored_label(
-                WARNING_COLOUR,
-                format!("low confidence ({:.0}%)", panel.confidence * 100.0),
+            theme::shadowed_text(
+                ui,
+                &format!("low confidence ({:.0}%)", panel.confidence * 100.0),
+                theme::YELLOW,
+                theme::BODY_SIZE,
             );
         }
     }
@@ -152,22 +143,31 @@ impl Overlay {
     fn draw(&mut self, ui: &mut egui::Ui) {
         ui.vertical_centered(|ui| {
             ui.add_space(48.0);
-            ui.heading("layassist");
+            theme::shadowed_text(ui, "layassist", theme::FG0, theme::TITLE_SIZE);
             ui.add_space(8.0);
             match &self.phase {
                 Phase::Capturing => {
                     if let Some(question) = self.session.question() {
-                        ui.colored_label(
-                            QUESTION_COLOUR,
-                            format!("Question: {}", question.selection.text),
+                        theme::shadowed_text(
+                            ui,
+                            &format!("Question: {}", question.selection.text),
+                            theme::BLUE,
+                            theme::BODY_SIZE,
                         );
                     } else {
-                        ui.label("Select the question text…");
+                        theme::shadowed_text(
+                            ui,
+                            "Select the question text…",
+                            theme::FG4,
+                            theme::BODY_SIZE,
+                        );
                     }
                     for (index, answer) in self.session.answers().iter().enumerate() {
-                        ui.colored_label(
-                            ANSWER_COLOUR,
-                            format!("Answer {}: {}", index + 1, answer.selection.text),
+                        theme::shadowed_text(
+                            ui,
+                            &format!("Answer {}: {}", index + 1, answer.selection.text),
+                            theme::GREEN,
+                            theme::BODY_SIZE,
                         );
                     }
                     ui.add_space(12.0);
@@ -177,20 +177,30 @@ impl Overlay {
                             .desired_width(480.0),
                     );
                     response.request_focus();
-                    ui.label("Tab: capture item · Enter: decide · Esc: cancel");
+                    theme::shadowed_text(
+                        ui,
+                        "Tab: capture item · Enter: decide · Esc: cancel",
+                        theme::FG4,
+                        theme::BODY_SIZE,
+                    );
                 }
                 Phase::Running => {
                     ui.spinner();
-                    ui.label("Deciding…");
+                    theme::shadowed_text(ui, "Deciding…", theme::FG1, theme::BODY_SIZE);
                 }
                 Phase::Results(panel) => {
                     Self::draw_results(ui, panel);
                     ui.add_space(8.0);
-                    ui.label("click or Esc: dismiss");
+                    theme::shadowed_text(ui, "click or Esc: dismiss", theme::FG4, theme::BODY_SIZE);
                 }
                 Phase::Error(error) => {
-                    ui.colored_label(ERROR_COLOUR, format!("error: {error}"));
-                    ui.label("Esc: dismiss");
+                    theme::shadowed_text(
+                        ui,
+                        &format!("error: {error}"),
+                        theme::RED,
+                        theme::BODY_SIZE,
+                    );
+                    theme::shadowed_text(ui, "Esc: dismiss", theme::FG4, theme::BODY_SIZE);
                 }
             }
         });
@@ -198,6 +208,10 @@ impl Overlay {
 }
 
 impl OverlayApp for Overlay {
+    fn configure(&mut self, ctx: &egui::Context) {
+        theme::install(ctx);
+    }
+
     fn update(&mut self, ctx: &egui::Context) {
         self.poll();
         self.capture();
@@ -221,7 +235,7 @@ impl OverlayApp for Overlay {
         }
 
         egui::CentralPanel::default()
-            .frame(egui::Frame::NONE.fill(egui::Color32::from_black_alpha(60)))
+            .frame(egui::Frame::NONE.fill(theme::OVERLAY_BG))
             .show(ctx, |ui| self.draw(ui));
     }
 
