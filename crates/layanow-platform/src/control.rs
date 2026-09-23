@@ -43,6 +43,9 @@ pub enum Command {
     Hide,
     /// Quit the applet.
     Quit,
+    /// Re-read the settings file and apply it (T-113/T-117: checkpoint,
+    /// confidence threshold, unload policy).
+    Reload,
 }
 
 impl Command {
@@ -54,6 +57,7 @@ impl Command {
             Self::Show => "show",
             Self::Hide => "hide",
             Self::Quit => "quit",
+            Self::Reload => "reload",
         }
     }
 
@@ -67,6 +71,7 @@ impl Command {
             "show" => Ok(Self::Show),
             "hide" => Ok(Self::Hide),
             "quit" => Ok(Self::Quit),
+            "reload" => Ok(Self::Reload),
             other => Err(ControlError::InvalidCommand(other.to_string())),
         }
     }
@@ -306,7 +311,9 @@ mod tests {
 
     #[test]
     fn commands_round_trip_through_the_wire_form() {
-        for command in [Command::Toggle, Command::Show, Command::Hide, Command::Quit] {
+        for command in
+            [Command::Toggle, Command::Show, Command::Hide, Command::Quit, Command::Reload]
+        {
             assert_eq!(Command::parse(command.as_str()).ok(), Some(command));
         }
         assert!(matches!(Command::parse("bogus"), Err(ControlError::InvalidCommand(_))));

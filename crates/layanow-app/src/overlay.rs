@@ -28,6 +28,7 @@ use layanow_platform::overlay::OverlayApp;
 use layanow_resolvers::TextResolver;
 
 use crate::results::{self, DEFAULT_CONFIDENCE_THRESHOLD, Results};
+use crate::settings::{Settings, UnloadPolicy};
 use crate::theme;
 use crate::worker::{Response, Worker};
 
@@ -109,6 +110,18 @@ impl Overlay {
     /// Override the low-confidence threshold (from settings, T-115).
     pub fn set_threshold(&mut self, threshold: f32) {
         self.threshold = threshold;
+    }
+
+    /// Re-read the settings file and apply it live (T-113/T-115/T-117): the
+    /// threshold changes immediately, and the worker is reconfigured for the
+    /// checkpoint and unload policy.
+    fn apply_settings(&mut self) {
+        let settings = Settings::load();
+        self.threshold = settings.confidence_threshold;
+        let on_demand = settings.unload == UnloadPolicy::OnDemand;
+        if let Err(error) = self.worker.configure(settings.checkpoint, on_demand) {
+            tracing::warn!(%error, "could not apply settings");
+        }
     }
 
     /// Capture one item on `Tab`: the typed entry if there is one, otherwise
@@ -363,6 +376,7 @@ impl OverlayApp for Overlay {
                 Command::Show => self.set_visible(true),
                 Command::Hide => self.set_visible(false),
                 Command::Quit => self.exit = true,
+                Command::Reload => self.apply_settings(),
             }
         }
     }
@@ -509,14 +523,16 @@ mod tests {
     fn overlay_with(engine: impl DecisionEngine) -> (Overlay, TestResolver) {
         let resolver = TestResolver::default();
         let (_commands_tx, commands) = crossbeam_channel::unbounded();
-        let overlay = Overlay::new(Worker::spawn(engine), Box::new(resolver.clone()), commands);
+        let overlay =
+            Overlay::new(Worker::spawn_fixed(engine), Box::new(resolver.clone()), commands);
         (overlay, resolver)
     }
 
     /// An overlay controlled through its command channel.
     fn controlled() -> (Overlay, crossbeam_channel::Sender<Command>) {
         let (tx, rx) = crossbeam_channel::unbounded();
-        let overlay = Overlay::new(Worker::spawn(FirstWins), Box::new(TestResolver::default()), rx);
+        let overlay =
+            Overlay::new(Worker::spawn_fixed(FirstWins), Box::new(TestResolver::default()), rx);
         (overlay, tx)
     }
 
@@ -689,7 +705,7 @@ mod tests {
         let resolver = TestResolver::default();
         let (_commands_tx, commands) = crossbeam_channel::unbounded();
         let mut overlay = Overlay::new(
-            Worker::spawn(Gated { started: started_tx, release: release_rx }),
+            Worker::spawn_fixed(Gated { started: started_tx, release: release_rx }),
             Box::new(resolver.clone()),
             commands,
         );

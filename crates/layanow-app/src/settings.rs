@@ -9,6 +9,18 @@ use serde::{Deserialize, Serialize};
 
 use crate::results::DEFAULT_CONFIDENCE_THRESHOLD;
 
+/// Whether the model stays resident or is unloaded between decisions
+/// (ADR-11, T-117).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum UnloadPolicy {
+    /// Keep the model resident (the default): instant answers, ~2 GB idle.
+    #[default]
+    Hot,
+    /// Drop the model after each decision and reload on the next one.
+    OnDemand,
+}
+
 /// The persisted configuration.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
@@ -19,6 +31,8 @@ pub struct Settings {
     /// Confidence below which a decision is flagged as low-confidence
     /// (ADR-27 C2). The app never refuses to answer.
     pub confidence_threshold: f32,
+    /// Hot vs on-demand model residency (ADR-11, T-117).
+    pub unload: UnloadPolicy,
 }
 
 impl Default for Settings {
@@ -26,6 +40,7 @@ impl Default for Settings {
         Self {
             checkpoint: layanow_model::bundle::DEFAULT_ID.to_string(),
             confidence_threshold: DEFAULT_CONFIDENCE_THRESHOLD,
+            unload: UnloadPolicy::Hot,
         }
     }
 }
@@ -89,12 +104,15 @@ mod tests {
         assert_eq!(parsed, settings);
         assert_eq!(parsed.checkpoint, layanow_model::bundle::DEFAULT_ID);
         assert!((parsed.confidence_threshold - DEFAULT_CONFIDENCE_THRESHOLD).abs() < f32::EPSILON);
+        assert_eq!(parsed.unload, UnloadPolicy::Hot);
     }
 
     #[test]
     fn missing_keys_fall_back_to_defaults() {
-        let parsed: Settings = toml::from_str("confidence_threshold = 0.7\n").expect("parse");
+        let parsed: Settings =
+            toml::from_str("confidence_threshold = 0.7\nunload = \"on-demand\"\n").expect("parse");
         assert_eq!(parsed.checkpoint, layanow_model::bundle::DEFAULT_ID);
         assert!((parsed.confidence_threshold - 0.7).abs() < f32::EPSILON);
+        assert_eq!(parsed.unload, UnloadPolicy::OnDemand);
     }
 }

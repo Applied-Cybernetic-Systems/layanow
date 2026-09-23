@@ -9,8 +9,8 @@
 #![cfg_attr(test, allow(clippy::unwrap_used, clippy::expect_used, clippy::panic))]
 
 use layanow_app::overlay::Overlay;
-use layanow_app::settings::Settings;
-use layanow_app::worker::Worker;
+use layanow_app::settings::{Settings, UnloadPolicy};
+use layanow_app::worker::{EngineFactory, Worker};
 use layanow_model::{Decider, bundle};
 use layanow_platform::control::{self, Command, ControlError};
 
@@ -118,7 +118,7 @@ fn run_applet() -> Result<(), Box<dyn std::error::Error>> {
         }
     };
     let settings = Settings::load();
-    let worker = load_worker(&settings)?;
+    let worker = build_worker(&settings);
     let resolver = layanow_platform::selection::resolver();
     let mut overlay = Overlay::new(worker, resolver, control.receiver);
     overlay.set_threshold(settings.confidence_threshold);
@@ -130,24 +130,30 @@ fn run_applet() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
-/// Load the checkpoint chosen in settings (falling back to the default) and
-/// start the inference worker.
+/// Build the inference worker.
 ///
-/// Weights are downloaded on first use when `LAYANOW_ALLOW_MODEL_DOWNLOAD`
-/// is set (ADR-17); otherwise a cached bundle is required.
-fn load_worker(settings: &Settings) -> Result<Worker, Box<dyn std::error::Error>> {
-    let spec = bundle::checkpoint(&settings.checkpoint)
-        .or_else(|| bundle::checkpoint(bundle::DEFAULT_ID))
-        .ok_or("no checkpoints are registered")?;
-    if spec.id != settings.checkpoint {
-        tracing::warn!(
-            requested = %settings.checkpoint,
-            using = spec.id,
-            "unknown checkpoint; using the default"
-        );
-    }
-    let dir = bundle::ensure_bundle(spec)?;
-    tracing::info!(checkpoint = spec.id, path = %dir.display(), "using bundle");
-    let checkpoint = bundle::checkpoint_from_dir(spec, &dir)?;
-    Ok(Worker::spawn(Decider::load(&checkpoint)?))
+/// The engine is built lazily on the worker thread (via the factory), so the
+/// applet starts immediately even before a multi-gigabyte model is ready and a
+/// later settings change can swap the checkpoint without freezing the overlay
+/// (T-113/T-117).
+fn build_worker(settings: &Settings) -> Worker {
+    let factory: EngineFactory = Box::new(|checkpoint_id| {
+        let spec = bundle::checkpoint(checkpoint_id)
+            .or_else(|| bundle::checkpoint(bundle::DEFAULT_ID))
+            .ok_or_else(|| "no checkpoints are registered".to_string())?;
+        if spec.id != checkpoint_id {
+            tracing::warn!(
+                requested = checkpoint_id,
+                using = spec.id,
+                "unknown checkpoint; using the default"
+            );
+        }
+        let dir = bundle::ensure_bundle(spec).map_err(|error| error.to_string())?;
+        tracing::info!(checkpoint = spec.id, path = %dir.display(), "using bundle");
+        let checkpoint =
+            bundle::checkpoint_from_dir(spec, &dir).map_err(|error| error.to_string())?;
+        let decider = Decider::load(&checkpoint).map_err(|error| error.to_string())?;
+        Ok(Box::new(decider))
+    });
+    Worker::spawn(factory, settings.checkpoint.clone(), settings.unload == UnloadPolicy::OnDemand)
 }

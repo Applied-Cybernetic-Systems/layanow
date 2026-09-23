@@ -1,10 +1,16 @@
 //! The inference worker.
 //!
 //! Per ADR-1 the model runs on a dedicated thread and the UI talks to it over
-//! channels, so the overlay never blocks on a decision. The worker owns the
-//! [`DecisionEngine`](crate::worker::DecisionEngine) (in production a
-//! [`layanow_model::Decider`]) and answers one
-//! [`Request`](crate::worker::Request) at a time.
+//! channels, so the overlay never blocks on a decision. The worker owns a
+//! [`DecisionEngine`](crate::worker::DecisionEngine) built by an
+//! [`EngineFactory`] and answers one [`Request`](crate::worker::Request) at a
+//! time.
+//!
+//! The factory indirection is what makes the settings real (T-113/T-117): the
+//! engine can be (re)built for another checkpoint, and the on-demand policy
+//! drops it after each decision. Loading therefore happens on this thread, not
+//! on the applet's event loop, so a several-second `Decider::load` never freezes
+//! the overlay.
 
 use std::sync::mpsc::{self, Receiver, Sender};
 use std::thread::{self, JoinHandle};
@@ -22,6 +28,14 @@ pub enum Request {
         question: String,
         /// The candidate answers, in capture order.
         answers: Vec<String>,
+    },
+    /// Apply changed settings: rebuild for `checkpoint` and set the unload
+    /// policy (T-113/T-117).
+    Configure {
+        /// The checkpoint id to load.
+        checkpoint: String,
+        /// Whether to unload the engine after each decision.
+        on_demand: bool,
     },
 }
 
@@ -55,6 +69,9 @@ pub trait DecisionEngine: Send + 'static {
         answers: &[String],
     ) -> Result<Vec<RankedAnswer>, String>;
 }
+
+/// Builds a decision engine for a checkpoint id.
+pub type EngineFactory = Box<dyn FnMut(&str) -> Result<Box<dyn DecisionEngine>, String> + Send>;
 
 impl DecisionEngine for layanow_model::Decider {
     fn decide_choice(
@@ -90,12 +107,29 @@ pub struct Worker {
 }
 
 impl Worker {
-    /// Spawn a worker that owns `engine`.
-    pub fn spawn(engine: impl DecisionEngine) -> Self {
+    /// Spawn a worker driven by `factory`, starting on `checkpoint`.
+    ///
+    /// Unless `on_demand`, the engine is loaded eagerly on the worker thread;
+    /// with `on_demand` it is loaded on the first decision and dropped
+    /// afterwards (T-117). Loading never blocks the caller.
+    pub fn spawn(factory: EngineFactory, checkpoint: impl Into<String>, on_demand: bool) -> Self {
         let (requests, request_rx) = mpsc::channel::<Request>();
         let (response_tx, responses) = mpsc::channel::<Response>();
-        let handle = thread::spawn(move || run(engine, &request_rx, &response_tx));
+        let checkpoint = checkpoint.into();
+        let handle =
+            thread::spawn(move || run(factory, &request_rx, &response_tx, checkpoint, on_demand));
         Self { requests: Some(requests), responses, handle: Some(handle) }
+    }
+
+    /// Spawn a worker around a single, fixed engine (tests and headless use).
+    ///
+    /// The engine is loaded eagerly and never rebuilt.
+    pub fn spawn_fixed(engine: impl DecisionEngine) -> Self {
+        let mut engine: Option<Box<dyn DecisionEngine>> = Some(Box::new(engine));
+        let factory: EngineFactory = Box::new(move |_| {
+            engine.take().ok_or_else(|| "the fixed engine was already consumed".to_string())
+        });
+        Self::spawn(factory, "fixed", false)
     }
 
     /// Ask the worker to run a decision `id`. Returns immediately.
@@ -112,6 +146,19 @@ impl Worker {
             .as_ref()
             .ok_or(WorkerGone)?
             .send(Request::Decide { id, question, answers })
+            .map_err(|_| WorkerGone)
+    }
+
+    /// Apply changed settings (checkpoint and unload policy).
+    pub fn configure(
+        &self,
+        checkpoint: impl Into<String>,
+        on_demand: bool,
+    ) -> Result<(), WorkerGone> {
+        self.requests
+            .as_ref()
+            .ok_or(WorkerGone)?
+            .send(Request::Configure { checkpoint: checkpoint.into(), on_demand })
             .map_err(|_| WorkerGone)
     }
 
@@ -141,18 +188,60 @@ impl Drop for Worker {
 }
 
 fn run(
-    mut engine: impl DecisionEngine,
+    mut factory: EngineFactory,
     requests: &Receiver<Request>,
     responses: &Sender<Response>,
+    mut checkpoint: String,
+    mut on_demand: bool,
 ) {
+    let mut engine = if on_demand { None } else { load(&mut factory, &checkpoint) };
     while let Ok(request) = requests.recv() {
-        let Request::Decide { id, question, answers } = request;
-        let response = match engine.decide_choice(&question, &answers) {
-            Ok(ranked) => Response::Ranked { id, ranked },
-            Err(error) => Response::Failed { id, error },
-        };
-        if responses.send(response).is_err() {
-            break;
+        match request {
+            Request::Decide { id, question, answers } => {
+                if engine.is_none() {
+                    engine = load(&mut factory, &checkpoint);
+                }
+                let response = match engine.as_mut() {
+                    Some(engine) => match engine.decide_choice(&question, &answers) {
+                        Ok(ranked) => Response::Ranked { id, ranked },
+                        Err(error) => Response::Failed { id, error },
+                    },
+                    None => {
+                        Response::Failed { id, error: "the model could not be loaded".to_string() }
+                    }
+                };
+                if responses.send(response).is_err() {
+                    break;
+                }
+                if on_demand {
+                    engine = None;
+                }
+            }
+            Request::Configure { checkpoint: next, on_demand: next_on_demand } => {
+                if next != checkpoint {
+                    checkpoint = next;
+                    engine = None;
+                    if !next_on_demand {
+                        engine = load(&mut factory, &checkpoint);
+                    }
+                }
+                on_demand = next_on_demand;
+                if on_demand {
+                    engine = None;
+                }
+            }
+        }
+    }
+}
+
+/// Build the engine for `checkpoint`, logging (and swallowing) a load failure so
+/// the next decision can report it to the UI.
+fn load(factory: &mut EngineFactory, checkpoint: &str) -> Option<Box<dyn DecisionEngine>> {
+    match factory(checkpoint) {
+        Ok(engine) => Some(engine),
+        Err(error) => {
+            tracing::error!(%error, checkpoint, "could not load the model");
+            None
         }
     }
 }
@@ -198,7 +287,7 @@ mod tests {
 
     #[test]
     fn worker_returns_ranked_answers() {
-        let worker = Worker::spawn(ByLength);
+        let worker = Worker::spawn_fixed(ByLength);
         worker.decide(7, "q".to_string(), vec!["aa".to_string(), "b".to_string()]).unwrap();
         let Response::Ranked { id, ranked } = worker.recv().unwrap() else {
             panic!("expected ranked answers");
@@ -210,11 +299,49 @@ mod tests {
 
     #[test]
     fn worker_propagates_failures() {
-        let worker = Worker::spawn(Broken);
+        let worker = Worker::spawn_fixed(Broken);
         worker.decide(3, "q".to_string(), vec!["a".to_string()]).unwrap();
         assert_eq!(
             worker.recv().unwrap(),
             Response::Failed { id: 3, error: "no model".to_string() }
         );
+    }
+
+    #[test]
+    fn on_demand_rebuilds_the_engine_for_each_decision() {
+        use std::sync::Arc;
+        use std::sync::atomic::{AtomicU32, Ordering};
+
+        let builds = Arc::new(AtomicU32::new(0));
+        let counter = Arc::clone(&builds);
+        let factory: EngineFactory = Box::new(move |_| {
+            counter.fetch_add(1, Ordering::Relaxed);
+            Ok(Box::new(ByLength))
+        });
+        let worker = Worker::spawn(factory, "test", true);
+        for id in 0..2 {
+            worker.decide(id, "q".to_string(), vec!["a".to_string()]).unwrap();
+            drop(worker.recv().unwrap());
+        }
+        assert_eq!(builds.load(Ordering::Relaxed), 2, "on-demand loads once per decision");
+    }
+
+    #[test]
+    fn reconfigure_swaps_the_checkpoint() {
+        use std::sync::{Arc, Mutex};
+
+        let seen = Arc::new(Mutex::new(Vec::new()));
+        let log = Arc::clone(&seen);
+        let factory: EngineFactory = Box::new(move |checkpoint| {
+            log.lock().expect("test lock").push(checkpoint.to_string());
+            Ok(Box::new(ByLength))
+        });
+        let worker = Worker::spawn(factory, "english", false);
+        worker.decide(0, "q".to_string(), vec!["a".to_string()]).unwrap();
+        drop(worker.recv().unwrap());
+        worker.configure("multilingual", false).unwrap();
+        worker.decide(1, "q".to_string(), vec!["a".to_string()]).unwrap();
+        drop(worker.recv().unwrap());
+        assert_eq!(&*seen.lock().expect("test lock"), &["english", "multilingual"]);
     }
 }
