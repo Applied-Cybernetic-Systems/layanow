@@ -12,9 +12,11 @@
 //!
 //! The protocol is one newline-terminated [`Command`](crate::control::Command)
 //! per connection. The name is user-scoped: on Unix it lives under
-//! `$XDG_RUNTIME_DIR` (a mode-0700 directory), and
-//! [`cleanup`](crate::control::cleanup) unlinks it on a clean exit (process exit
-//! skips the listener's own name reclamation).
+//! `$XDG_RUNTIME_DIR` (a mode-0700 directory); if that is unset it falls back to
+//! a per-uid subdirectory created mode 0700 with the socket itself restricted
+//! to 0600, so the control channel is never exposed through a shared temp dir
+//! (T-169). [`cleanup`](crate::control::cleanup) unlinks it on a clean exit
+//! (process exit skips the listener's own name reclamation).
 
 use std::io::{BufRead, BufReader, Write};
 use std::thread;
@@ -123,8 +125,8 @@ pub fn send(command: Command) -> Result<(), ControlError> {
 /// pipe disappears with the process.
 pub fn cleanup() {
     #[cfg(unix)]
-    {
-        drop(std::fs::remove_file(socket_path(DEFAULT_ID)));
+    if let Ok(path) = socket_path(DEFAULT_ID) {
+        drop(std::fs::remove_file(path));
     }
 }
 
@@ -163,10 +165,16 @@ fn bind(id: &str) -> Result<LocalSocketListener, ControlError> {
     {
         // The connect above failed, so any file at the path is stale; remove it
         // so the bind can succeed. Named pipes leave nothing behind.
-        drop(std::fs::remove_file(socket_path(id)));
+        drop(std::fs::remove_file(socket_path(id)?));
     }
     match ListenerOptions::new().name(name).create_sync() {
-        Ok(listener) => Ok(listener),
+        Ok(listener) => {
+            // Defence in depth: the containing directory is already user-private,
+            // but make the socket itself 0600 as well (T-169).
+            #[cfg(unix)]
+            restrict_socket(&socket_path(id)?)?;
+            Ok(listener)
+        }
         // Another instance won the race between connect and bind.
         Err(error) if error.kind() == std::io::ErrorKind::AddrInUse => {
             Err(ControlError::AlreadyRunning)
@@ -205,7 +213,7 @@ fn serve(listener: &LocalSocketListener, tx: &Sender<Command>) {
 fn socket_name(id: &str) -> Result<Name<'static>, ControlError> {
     #[cfg(unix)]
     {
-        Ok(socket_path(id).to_fs_name::<GenericFilePath>()?)
+        Ok(socket_path(id)?.to_fs_name::<GenericFilePath>()?)
     }
     #[cfg(windows)]
     {
@@ -214,11 +222,69 @@ fn socket_name(id: &str) -> Result<Name<'static>, ControlError> {
 }
 
 /// The Unix socket path for `id` (Unix only).
+///
+/// Prefers `$XDG_RUNTIME_DIR`; when it is unset, falls back to a user-private
+/// directory under the temp dir (see [`private_runtime_dir`], T-169).
 #[cfg(unix)]
-fn socket_path(id: &str) -> std::path::PathBuf {
-    let dir = std::env::var_os("XDG_RUNTIME_DIR")
-        .map_or_else(std::env::temp_dir, std::path::PathBuf::from);
-    dir.join(format!("{id}.sock"))
+fn socket_path(id: &str) -> Result<std::path::PathBuf, ControlError> {
+    Ok(private_runtime_dir()?.join(format!("{id}.sock")))
+}
+
+/// The user-private directory that holds the control socket.
+///
+/// `$XDG_RUNTIME_DIR` is already a per-user, mode-0700 directory, so it is
+/// trusted as-is. When it is unset we must not put the socket directly in a
+/// shared temp dir: instead it lives in a per-uid subdirectory created mode
+/// 0700, and [`bind`] restricts the socket itself to 0600, so another user
+/// cannot connect to the applet's control channel (T-169).
+#[cfg(unix)]
+fn private_runtime_dir() -> Result<std::path::PathBuf, ControlError> {
+    if let Some(dir) = std::env::var_os("XDG_RUNTIME_DIR").filter(|value| !value.is_empty()) {
+        return Ok(std::path::PathBuf::from(dir));
+    }
+    let dir = std::env::temp_dir().join(format!("layanow-{}", user_id()));
+    secure_private_dir(&dir)?;
+    Ok(dir)
+}
+
+/// Create `dir` if absent and force it to mode 0700, refusing anything that is
+/// not a real directory (e.g. a symlink or a file another user planted).
+#[cfg(unix)]
+fn secure_private_dir(dir: &std::path::Path) -> Result<(), ControlError> {
+    use std::os::unix::fs::PermissionsExt;
+    match std::fs::symlink_metadata(dir) {
+        Ok(meta) if !meta.file_type().is_dir() => {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::AlreadyExists,
+                format!("{} exists and is not a private directory", dir.display()),
+            )
+            .into());
+        }
+        Ok(_) => {}
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+            std::fs::create_dir_all(dir)?;
+        }
+        Err(error) => return Err(error.into()),
+    }
+    // set_permissions fails with EPERM if another user owns the directory,
+    // which is exactly the case we must refuse.
+    std::fs::set_permissions(dir, std::fs::Permissions::from_mode(0o700))?;
+    Ok(())
+}
+
+/// Restrict a Unix socket to the current user (T-169).
+#[cfg(unix)]
+fn restrict_socket(path: &std::path::Path) -> Result<(), ControlError> {
+    use std::os::unix::fs::PermissionsExt;
+    std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o600))?;
+    Ok(())
+}
+
+/// The current user's numeric id.
+#[cfg(unix)]
+fn user_id() -> u32 {
+    // SAFETY: `getuid` takes no arguments, cannot fail, and has no side effects.
+    unsafe { libc::getuid() }
 }
 
 #[cfg(test)]
@@ -288,5 +354,22 @@ mod tests {
         drop(rx);
         send_to(&id, Command::Quit).expect("send");
         server.join().expect("join");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn the_fallback_directory_is_private_and_rejects_a_file() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let dir = std::env::temp_dir().join(test_id("private-dir"));
+        drop(std::fs::remove_dir_all(&dir));
+        secure_private_dir(&dir).expect("create private dir");
+        let mode = std::fs::metadata(&dir).expect("metadata").permissions().mode() & 0o777;
+        assert_eq!(mode, 0o700, "the fallback dir must be mode 0700");
+        drop(std::fs::remove_dir_all(&dir));
+
+        std::fs::write(&dir, b"not a directory").expect("write");
+        assert!(secure_private_dir(&dir).is_err(), "a squatting file must be refused");
+        drop(std::fs::remove_file(&dir));
     }
 }
