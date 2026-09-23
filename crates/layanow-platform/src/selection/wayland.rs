@@ -9,14 +9,15 @@
 use std::io::Read;
 
 use layanow_core::{Selection, Source};
-use layanow_resolvers::{ResolveError, SelectionStream, TextResolver};
+use layanow_resolvers::{ResolveError, TextResolver};
 use wl_clipboard_rs::paste::{ClipboardType, Error as PasteError, MimeType, Seat, get_contents};
 
 /// Reads the Wayland **PRIMARY** selection (`wl-paste -p`).
 ///
 /// Each call opens a short-lived connection to the compositor, requests the
 /// current text offer, and reads it from a pipe. It holds no state between
-/// calls, so it can be called from any thread.
+/// calls, so it can be called from any thread. The data-control protocols have
+/// no change notification, so there is no watch API (ADR-33).
 pub struct PrimarySelectionResolver;
 
 impl PrimarySelectionResolver {
@@ -62,12 +63,6 @@ impl TextResolver for PrimarySelectionResolver {
             ) => Ok(None),
             Err(error) => Err(ResolveError::Platform(error.to_string())),
         }
-    }
-
-    fn watch(&self) -> Option<SelectionStream> {
-        // `ext-data-control`/`wlr-data-control` has no change notification;
-        // capture is a manual `Tab`-commit instead (ADR-33).
-        None
     }
 }
 

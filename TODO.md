@@ -52,10 +52,6 @@ agents must update it whenever work is started, finished, or newly discovered.
 - **T-137** · 2026-09-22 · resolve — Decide the fallback for apps that never publish PRIMARY (e.g. Zed): accessibility, OCR, or opt-in copy-with-save/restore; document the shortlist. (`README.md` "# Text capture")
 - **T-169** · 2026-09-22 · platform — Harden the control socket when `XDG_RUNTIME_DIR` is unset: `socket_path` falls back to `std::env::temp_dir()`, so ensure the socket is mode 0600 or refuse a shared directory. (ADR-34, `crates/layanow-platform/src/control.rs`)
 
-### Core & data model
-- **T-159** · 2026-09-22 · core — `Selection.bounds`/`Rect` are currently unused; wire them when the a11y/OCR resolvers land, or drop them if no resolver will populate them. (`RESOLVERS.md`)
-- **T-160** · 2026-09-22 · core — Decide the fate of `TextResolver::watch`/`SelectionStream` now that auto-capture was dropped (remove the unused API, or keep it explicitly for the future). (ADR-26/33)
-
 ### App & UI
 - **T-140** · 2026-09-22 · app — Error popup per ADR-18 (currently errors render inline in the overlay). (ADR-18, M6)
 - **T-141** · 2026-09-22 · app — Add a regression test/guarantee that neither PRIMARY reads nor any fallback ever modifies the clipboard. (ADR-5, M6)
@@ -74,7 +70,6 @@ agents must update it whenever work is started, finished, or newly discovered.
 - **T-156** · 2026-09-22 · pkg — Update mechanism / model version pinning decision. (D5)
 - **T-157** · 2026-09-22 · pkg — Telemetry decision (assumed none). (E9)
 - **T-163** · 2026-09-22 · build — Audit dev-shell dependencies (`wtype`, `at-spi2-core`/`dbus`) against actual use and remove or justify each.
-- **T-165** · 2026-09-22 · ci — Keep the `.cargo/config.toml` aliases (`lint`, `gate`) and CI in sync (CI calls the raw commands; the `gate` alias is unused).
 
 ### Docs & maintenance
 - **T-158** · 2026-09-22 · docs — M6 documentation pass: refresh `README.md`/`PLAN.md`/`RESOLVERS.md` after M5 lands (status, quickstart, settings).
@@ -117,3 +112,6 @@ _(empty — pick a task from **Open** and move its line here when you start it.)
 - **T-167** · 2026-09-22 · app — Add a per-decision request id/cancellation token so a decision that finishes after a hide/show cannot be consumed as a newer one. **Closed:** 2026-09-22 · `Request::Decide` and `Response` now carry a `u64` id; `Overlay` tracks the id of the in-flight decision and drops any reply whose id does not match (the old guard only checked the phase). Added a gated-engine regression test that abandons decision 0, runs decision 1, and asserts the stale reply is ignored. Shipped in the `fix(app): drop stale decision replies by request id (T-167)` commit (ADR-34).
 - **T-151** · 2026-09-22 · ci — Align doc linting with `PLAN.md`. **Closed:** 2026-09-22 · set `missing_docs = "deny"` in the workspace lints (matching `PLAN.md`/`AGENTS.md`) and added `RUSTDOCFLAGS=-D warnings` to the CI docs step; the whole workspace is clean under both. Shipped in the `chore(ci): deny missing docs and rustdoc warnings (T-151)` commit.
 - **T-152** · 2026-09-22 · build — Remove dead dev-shell entries. **Closed:** 2026-09-22 · dropped `vulkan-loader` (unused since ADR-31 replaced eframe/wgpu with the `egui_glow`/glutin host) and the `WGPU_BACKEND` export from `flake.nix`, and updated the README dev-environment list. Shipped in the `chore(build): drop dead vulkan/wgpu dev-shell entries (T-152)` commit.
+- **T-160** · 2026-09-22 · core — Decide the fate of `TextResolver::watch`/`SelectionStream`. **Closed:** 2026-09-22 · decision: **delete** both — data-control exposes no change notification, ADR-33 replaced auto-capture with manual `Tab`-commit, and no backend implemented it. Removed the trait method, the `SelectionStream` type, and every impl; documented that auto-capture would observe the overlay's own `wl_data_device` and need a new interface. Shipped in the `refactor: prune resolver API and cargo aliases (T-159/T-160/T-165)` commit (ADR-26/33).
+- **T-165** · 2026-09-22 · ci — Keep the `.cargo/config.toml` aliases and CI in sync. **Closed:** 2026-09-22 · a cargo alias can run only one command, so the misnamed `gate = fmt` could never express the full gate; removed it and added `fmt-check`, leaving `lint`/`fmt-check` matching the CI steps. Shipped in the same commit.
+- **T-159** · 2026-09-22 · core — `Selection.bounds`/`Rect` are currently unused. **Closed:** 2026-09-22 · decision: **keep and document** them as reserved for the a11y/OCR resolvers to report screen regions (ADR-3); added doc comments to `Rect`/`Selection::bounds` and a `RESOLVERS.md` note. Shipped in the same commit.

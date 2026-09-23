@@ -409,7 +409,7 @@ mod tests {
     use crate::worker::DecisionEngine;
     use layanow_core::{Selection, Source};
     use layanow_model::RankedAnswer;
-    use layanow_resolvers::{ResolveError, SelectionStream};
+    use layanow_resolvers::{ResolveError, TextResolver};
 
     /// An engine that ranks the first answer highest.
     struct FirstWins;
@@ -459,10 +459,6 @@ mod tests {
 
         fn resolve_current_selection(&self) -> Result<Option<Selection>, ResolveError> {
             Ok(self.current.lock().expect("test lock").clone())
-        }
-
-        fn watch(&self) -> Option<SelectionStream> {
-            None
         }
     }
 

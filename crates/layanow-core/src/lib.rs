@@ -6,6 +6,10 @@
 #![cfg_attr(test, allow(clippy::unwrap_used, clippy::expect_used, clippy::panic))]
 
 /// A rectangle in logical screen coordinates.
+///
+/// Reserved: no v1 resolver populates a [`Selection::bounds`]; the
+/// accessibility/OCR resolvers (ADR-3) are expected to report the screen region
+/// a selection came from so the overlay can avoid covering it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Rect {
     /// Left edge, in logical pixels.
@@ -38,7 +42,8 @@ pub struct Selection {
     pub text: String,
     /// Which resolver produced it.
     pub source: Source,
-    /// Screen bounds, when the resolver can report them.
+    /// Screen bounds, when the resolver can report them (reserved; every v1
+    /// resolver leaves this `None`, see [`Rect`]).
     pub bounds: Option<Rect>,
 }
 

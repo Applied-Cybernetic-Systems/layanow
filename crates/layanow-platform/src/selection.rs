@@ -49,8 +49,4 @@ impl TextResolver for UnavailableResolver {
     ) -> Result<Option<layanow_core::Selection>, layanow_resolvers::ResolveError> {
         Ok(None)
     }
-
-    fn watch(&self) -> Option<layanow_resolvers::SelectionStream> {
-        None
-    }
 }

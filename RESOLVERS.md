@@ -12,7 +12,7 @@ A resolver turns the user's **native text selection** into text for the app.
 pub struct Selection {
     pub text: String,
     pub source: Source,               // Selection (native) | Manual (typed) | Accessibility | Ocr (future)
-    pub bounds: Option<Rect>,         // screen coords, if known
+    pub bounds: Option<Rect>,         // screen coords, if known (reserved; always None in v1)
 }
 
 pub trait TextResolver: Send + Sync {
@@ -20,10 +20,13 @@ pub trait TextResolver: Send + Sync {
     fn available(&self) -> bool;
     /// Read the app's current native text selection, if any.
     fn resolve_current_selection(&self) -> Result<Option<Selection>, ResolveError>;
-    /// Watch for selection changes (for auto-capture); `None` if unsupported.
-    fn watch(&self) -> Option<SelectionStream>;
 }
 ```
+
+The trait has no change-notification API: the data-control protocols expose
+none, and v1 capture is a manual `Tab`-commit (ADR-33). Auto-capture (ADR-26),
+if it returns, would observe the overlay surface's own `wl_data_device` instead
+and would need its own interface.
 
 `resolve_region` is removed from v1: the overlay is click-through and does not
 receive drags (ADR-14).

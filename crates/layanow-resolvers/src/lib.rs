@@ -28,13 +28,15 @@ impl std::fmt::Display for ResolveError {
 
 impl std::error::Error for ResolveError {}
 
-/// A stream of selection changes produced by [`TextResolver::watch`].
-pub type SelectionStream = Box<dyn Iterator<Item = Result<Selection, ResolveError>> + Send>;
-
 /// A source of text from the screen.
 ///
 /// Implementations must be side-effect free with respect to the clipboard
 /// (see ADR-5): they may read the selection buffer but must not overwrite it.
+///
+/// There is deliberately no change-notification API: the data-control
+/// protocols expose none, and v1 capture is a manual `Tab`-commit (ADR-33).
+/// Auto-capture (ADR-26), if it returns, would observe the overlay surface's own
+/// `wl_data_device` and would need its own interface.
 pub trait TextResolver: Send + Sync {
     /// Human-readable resolver name (for logs and the UI).
     fn name(&self) -> &'static str;
@@ -44,10 +46,6 @@ pub trait TextResolver: Send + Sync {
 
     /// Read the app's current native text selection, if any.
     fn resolve_current_selection(&self) -> Result<Option<Selection>, ResolveError>;
-
-    /// Watch for selection changes (for auto-capture, ADR-26), or `None` when
-    /// the backend cannot report changes.
-    fn watch(&self) -> Option<SelectionStream>;
 }
 
 #[cfg(test)]
