@@ -64,7 +64,6 @@ agents must update it whenever work is started, finished, or newly discovered.
 - **T-163** · 2026-09-22 · build — Audit dev-shell dependencies (`wtype`, `at-spi2-core`/`dbus`) against actual use and remove or justify each.
 
 ### Docs & maintenance
-- **T-158** · 2026-09-22 · docs — M6 documentation pass: refresh `README.md`/`PLAN.md`/`RESOLVERS.md` after M5 lands (status, quickstart, settings).
 - **T-162** · 2026-09-22 · docs — Decide whether to annotate superseded ADRs (ADR-16 → ADR-28, ADR-30 → ADR-31 → ADR-33) with a "Superseded by" pointer, or document the supersession convention once in `DECISIONS.md`.
 - **T-164** · 2026-09-22 · docs — Maintain a short list of apps known not to publish PRIMARY (Zed, Alacritty untested) and the recommended workaround, so users can self-diagnose. (`README.md`)
 
@@ -115,3 +114,4 @@ _(empty — pick a task from **Open** and move its line here when you start it.)
 - **T-117** · 2026-09-22 · M5 · app — Hot vs on-demand model unload setting. **Closed:** 2026-09-22 · `unload = "hot" | "on-demand"` in `config.toml`; the factory-backed worker keeps the engine (hot) or drops it after each decision and reloads on the next (on-demand). Shipped in the same commit (ADR-11).
 - **T-118** · 2026-09-22 · M5 · app — Persist settings to `~/.config/layanow/config.toml`. **Closed:** 2026-09-22 · `Settings` (checkpoint, confidence threshold, unload policy) loads at startup and saves from the settings window; an unknown or invalid file falls back to defaults. Shipped in the same commit (E5).
 - **T-171** · 2026-09-22 · app — Add a `Settings…` entry to the tray menu. **Closed:** 2026-09-22 · the tray menu is now `Toggle overlay`/`Settings…`/`Quit`; `Settings…` spawns `layanow settings`. Shipped in the same commit (ADR-35/38).
+- **T-158** · 2026-09-22 · docs — M6 documentation pass after M5. **Closed:** 2026-09-22 · refreshed `README.md` (status + `layanow settings` quickstart), `PLAN.md` (M5 row), `RESOLVERS.md` (dropped the removed `watch` API), and `OPEN-QUESTIONS.md` (E4/E5 resolved) as the settings work landed. Shipped across the M5 commits.
