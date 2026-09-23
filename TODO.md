@@ -58,7 +58,6 @@ agents must update it whenever work is started, finished, or newly discovered.
 ### Build, CI & packaging
 - **T-150** · 2026-09-22 · ci — Add `cargo audit` to CI (listed in `PLAN.md`, not currently run). (E2)
 - **T-154** · 2026-09-22 · pkg — Autostart at login (systemd user unit / xdg autostart). (D3)
-- **T-155** · 2026-09-22 · pkg — Distribution/packaging (Nix package for Linux; Windows/macOS later). (D2)
 - **T-156** · 2026-09-22 · pkg — Update mechanism / model version pinning decision. (D5)
 - **T-157** · 2026-09-22 · pkg — Telemetry decision (assumed none). (E9)
 - **T-163** · 2026-09-22 · build — Audit dev-shell dependencies (`wtype`, `at-spi2-core`/`dbus`) against actual use and remove or justify each.
@@ -115,3 +114,5 @@ _(empty — pick a task from **Open** and move its line here when you start it.)
 - **T-118** · 2026-09-22 · M5 · app — Persist settings to `~/.config/layanow/config.toml`. **Closed:** 2026-09-22 · `Settings` (checkpoint, confidence threshold, unload policy) loads at startup and saves from the settings window; an unknown or invalid file falls back to defaults. Shipped in the same commit (E5).
 - **T-171** · 2026-09-22 · app — Add a `Settings…` entry to the tray menu. **Closed:** 2026-09-22 · the tray menu is now `Toggle overlay`/`Settings…`/`Quit`; `Settings…` spawns `layanow settings`. Shipped in the same commit (ADR-35/38).
 - **T-158** · 2026-09-22 · docs — M6 documentation pass after M5. **Closed:** 2026-09-22 · refreshed `README.md` (status + `layanow settings` quickstart), `PLAN.md` (M5 row), `RESOLVERS.md` (dropped the removed `watch` API), and `OPEN-QUESTIONS.md` (E4/E5 resolved) as the settings work landed. Shipped across the M5 commits.
+- **T-155** · 2026-09-22 · pkg — Distribution/packaging (Nix package for Linux). **Closed:** 2026-09-22 · added `packages.x86_64-linux.{default,layanow}` and an `apps.layanow` entry to `flake.nix`, built with `rustPlatform.buildRustPackage` (the sandbox test phase passes) and wrapped with `ORT_DYLIB_PATH` and the Wayland/GL/X11 runtime libs. Installs `layanow.desktop`, `layanow-settings.desktop`, and the hicolor icon so rofi and other launchers find it. Windows/macOS packaging remains (D2). Shipped in the `feat(pkg): Nix package with desktop entries (T-155)` commit.
+- **T-177** · 2026-09-22 · docs — Transfer the repository to the `Applied-Cybernetic-Systems` GitHub organization, still private. **Closed:** 2026-09-22 · transferred via the GitHub transfer API; updated the local `origin` remote and ADR-22/E1. Committed in the `feat(pkg): Nix package with desktop entries (T-155)` commit.

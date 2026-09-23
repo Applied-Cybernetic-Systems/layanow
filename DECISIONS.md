@@ -153,8 +153,10 @@ Wayland-only, so a single overlay implementation cannot be cross-platform.
 APIs.
 
 ## ADR-22 — Repository
-**Decision:** Source lives at `github.com/Uiyx/layanow` (private), with a local
-git repo at `~/projects/layanow`.
+**Decision:** Source lives at `github.com/Applied-Cybernetic-Systems/layanow`
+(private), with a local git repo at `~/projects/layanow`. It was originally
+`github.com/Uiyx/layanow`; the repository was transferred to the Applied
+Cybernetic Systems organization on 2026-09-22 and stays **private**.
 
 ## ADR-23 — MCQ → Laya rendering (A5)
 **Decision:** Map an MCQ as `ins` = question text, `crit` = letter-labelled

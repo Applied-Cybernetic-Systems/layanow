@@ -1,5 +1,5 @@
 {
-  description = "layanow — Rust dev environment";
+  description = "layanow — local multiple-choice assistant";
 
   # Pinned to the same nixpkgs revision as the user's system flake
   # (~/projects/nix/flake.lock) so the toolchain matches the host.
@@ -10,6 +10,7 @@
     let
       system = "x86_64-linux";
       pkgs = import nixpkgs { inherit system; };
+      lib = pkgs.lib;
 
       # Start the AT-SPI accessibility bus if it is not already reachable.
       # The `accessibility` resolver depends on it (atspi crate / D-Bus).
@@ -33,8 +34,109 @@
         echo "warning: could not start the AT-SPI bus" >&2
         exit 1
       '';
+
+      # Libraries the binary links or dlopens at runtime: Wayland + EGL/GLES for
+      # the overlay, xkbcommon for key handling, the X11 stack for the eframe
+      # settings window, and ONNX Runtime (`ort` uses `load-dynamic`).
+      runtimeLibs = with pkgs; [
+        wayland
+        libxkbcommon
+        libGL
+        mesa
+        onnxruntime
+        libX11
+        libXcursor
+        libXi
+        libXrandr
+        libXinerama
+      ];
+
+      # The workspace itself. Everything outside the crates and config is
+      # excluded so the store path stays small.
+      src = lib.cleanSourceWith {
+        src = ./.;
+        filter =
+          path: _type:
+          let
+            base = baseNameOf (toString path);
+          in
+          !(builtins.elem base [
+            "target"
+            ".direnv"
+            "result"
+          ]);
+      };
+
+      layanow = pkgs.rustPlatform.buildRustPackage {
+        pname = "layanow";
+        version = "0.1.0";
+
+        inherit src;
+
+        cargoLock.lockFile = ./Cargo.lock;
+
+        nativeBuildInputs = with pkgs; [
+          pkg-config
+          cmake
+          makeWrapper
+        ];
+        buildInputs = with pkgs; [
+          openssl
+          wayland
+          libxkbcommon
+          libGL
+          mesa
+          libX11
+          libXcursor
+          libXi
+          libXrandr
+          libXinerama
+        ];
+
+        # Install the desktop entries + icon and point the binary at the Nix
+        # ONNX Runtime and the runtime libraries above.
+        postInstall = ''
+          install -Dm644 ${./assets/layanow.desktop} \
+            $out/share/applications/layanow.desktop
+          install -Dm644 ${./assets/layanow-settings.desktop} \
+            $out/share/applications/layanow-settings.desktop
+          install -Dm644 ${./crates/layanow-platform/assets/layanow.png} \
+            $out/share/icons/hicolor/32x32/apps/layanow.png
+
+          wrapProgram $out/bin/layanow \
+            --set ORT_DYLIB_PATH "${pkgs.onnxruntime}/lib/libonnxruntime.so" \
+            --prefix LD_LIBRARY_PATH : "${lib.makeLibraryPath runtimeLibs}"
+        '';
+
+        meta = {
+          description = "Ask a local Laya decision model which answer is correct";
+          longDescription = ''
+            A cross-platform desktop applet: highlight a question and its
+            candidate answers as native text (no OCR), and layanow asks a local
+            Laya typed-decision model (ONNX Runtime) which answer is correct,
+            then shows a ranked list with probability colours.
+          '';
+          homepage = "https://github.com/Applied-Cybernetic-Systems/layanow";
+          license = with lib.licenses; [
+            mit
+            asl20
+          ];
+          mainProgram = "layanow";
+          platforms = [ "x86_64-linux" ];
+        };
+      };
     in
     {
+      packages.${system} = {
+        default = layanow;
+        inherit layanow;
+      };
+
+      apps.${system}.layanow = {
+        type = "app";
+        program = lib.getExe layanow;
+      };
+
       devShells.${system}.default = pkgs.mkShell {
         packages = with pkgs; [
           # Rust toolchain

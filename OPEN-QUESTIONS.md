@@ -22,7 +22,7 @@ Decisions live in `DECISIONS.md` as ADRs. This file tracks what is still open.
 | B3 | X11 support | Wayland + X11 (ADR-21) |
 | C1–C7 | Model defaults | See ADR-27 |
 | D1 | v1 platform | Linux; order Linux → Windows → macOS |
-| E1 | Git | `github.com/Uiyx/layanow` (private) (ADR-22) |
+| E1 | Git | `github.com/Applied-Cybernetic-Systems/layanow` (private) (ADR-22) |
 | E3 | Testing fixtures | **Commit generated golden fixtures** for the rendering/calibration port; replay offline (ADR-29) |
 | E4 | Logging | **`tracing` + `tracing-subscriber`**; `LAYANOW_LOG` (fallback `RUST_LOG`), default `warn`, `LAYANOW_DEBUG` shorthand (T-143) |
 | E5 | Config | **TOML at `~/.config/layanow/config.toml`**: `checkpoint`, `confidence_threshold`, `unload` (hot/on-demand) in v1 (T-118, ADR-38) |
@@ -30,7 +30,7 @@ Decisions live in `DECISIONS.md` as ADRs. This file tracks what is still open.
 
 ## Deferred (decide later)
 
-- [ ] **D2. Distribution** — Nix flake package for Linux; packaging for Windows/macOS.
+- [x] **D2. Distribution** — Nix flake package for Linux (done, T-155); packaging for Windows/macOS remains.
 - [ ] **D3. Autostart** — start at login (systemd user unit / xdg autostart)?
 - [ ] **D4. Single instance** — enforce one applet instance?
 - [ ] **D5. Updates** — update mechanism, or manual? Model version pinning.

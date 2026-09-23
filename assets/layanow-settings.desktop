@@ -1,0 +1,12 @@
+[Desktop Entry]
+Type=Application
+Version=1.0
+Name=layanow settings
+GenericName=layanow configuration
+Comment=Configure the layanow checkpoint, confidence threshold, and residency
+Exec=layanow settings
+Icon=layanow
+Terminal=false
+Categories=Settings;Utility;
+Keywords=layanow;settings;preferences;configuration;
+StartupNotify=false

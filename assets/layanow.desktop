@@ -1,0 +1,12 @@
+[Desktop Entry]
+Type=Application
+Version=1.0
+Name=layanow
+GenericName=Multiple-choice assistant
+Comment=Ask a local Laya decision model which answer is correct
+Exec=layanow
+Icon=layanow
+Terminal=false
+Categories=Utility;Accessibility;
+Keywords=quiz;multiple-choice;decision;laya;ai;assistant;
+StartupNotify=false
