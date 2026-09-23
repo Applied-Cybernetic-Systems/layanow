@@ -18,6 +18,8 @@ jobs:
       - name: test
         run: nix develop --command cargo test --workspace
       - name: docs
+        env:
+          RUSTDOCFLAGS: -D warnings
         run: nix develop --command cargo doc --workspace --no-deps
       - name: deny
         run: nix develop --command cargo deny check

@@ -14,7 +14,7 @@ publish = false
 # Member crates opt in with `[lints] workspace = true`.
 [workspace.lints.rust]
 unsafe_code = "deny"
-missing_docs = "warn"
+missing_docs = "deny"
 # Lower priority than the individual lints below (which are members of this
 # group), so they can be set independently; clippy::lint_groups_priority.
 rust_2018_idioms = { level = "warn", priority = -1 }
