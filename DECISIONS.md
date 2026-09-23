@@ -270,9 +270,11 @@ visually verified; that, and removing the `Tab`-capture stub, is M4 work. The
 EGL/GLES context bound to that surface (`glutin`, with the raw `wl_display` /
 `wl_surface` from `smithay-client-toolkit`), and drives its own event loop
 (`calloop`-free: `libc::poll` on the connection fd with a 16 ms timeout). The
-pointer is **click-through** via an empty `wl_surface` input region (ADR-14),
-switched to the full region only while results are shown so the dismissing click
-is seen (ADR-15). The UI stays in `layanow-app` behind the `OverlayApp` trait.
+pointer is **click-through** via an empty `wl_surface` input region (ADR-14);
+while results are shown the input region is set to exactly the results-panel
+rectangle, so only the panel is clickable and everything else stays
+click-through (ADR-15, revised by T-166). The translucent backdrop is painted
+only behind the UI panel, not across the whole surface (T-166). The UI stays in `layanow-app` behind the `OverlayApp` trait.
 `eframe` is dropped from the dependency tree.
 **Why:** `winit`/`eframe` only create `xdg_toplevel` windows, which cannot be
 always-on-top, click-through, *and* keyboard-interactive on Wayland; that

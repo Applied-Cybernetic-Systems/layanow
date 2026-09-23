@@ -35,6 +35,12 @@ use crate::worker::{Response, Worker};
 /// edge.
 const RESULTS_LEFT_MARGIN: f32 = 160.0;
 
+/// Distance from the top of the screen to the UI panel.
+const PANEL_TOP_MARGIN: f32 = 48.0;
+
+/// Padding inside the panel's translucent backdrop.
+const PANEL_PADDING: i8 = 16;
+
 /// The overlay's current phase.
 #[derive(Debug)]
 enum Phase {
@@ -66,6 +72,9 @@ pub struct Overlay {
     /// does not match is stale (the decision it belongs to was dismissed) and
     /// is dropped (T-167).
     pending_request: Option<u64>,
+    /// The panel's screen rectangle from the last frame, used to keep only the
+    /// panel interactive (ADR-14, T-166).
+    panel_rect: Option<egui::Rect>,
     /// Whether the overlay is shown; starts hidden (ADR-34).
     visible: bool,
     exit: bool,
@@ -91,6 +100,7 @@ impl Overlay {
             entry: String::new(),
             next_request: 0,
             pending_request: None,
+            panel_rect: None,
             visible: false,
             exit: false,
         }
@@ -283,7 +293,6 @@ impl Overlay {
 
     fn draw(&mut self, ui: &mut egui::Ui) {
         ui.vertical_centered(|ui| {
-            ui.add_space(48.0);
             theme::shadowed_text(ui, "layanow", theme::FG0, theme::TITLE_SIZE);
             ui.add_space(8.0);
             if matches!(self.phase, Phase::Capturing) {
@@ -377,14 +386,25 @@ impl OverlayApp for Overlay {
             self.dismiss();
         }
 
-        egui::CentralPanel::default()
-            .frame(egui::Frame::NONE.fill(theme::OVERLAY_BG))
-            .show(ctx, |ui| self.draw(ui));
+        let area = egui::Area::new(egui::Id::new("layanow-panel"))
+            .anchor(egui::Align2::CENTER_TOP, egui::vec2(0.0, PANEL_TOP_MARGIN))
+            .show(ctx, |ui| {
+                egui::Frame::new()
+                    .fill(theme::OVERLAY_BG)
+                    .inner_margin(egui::Margin::same(PANEL_PADDING))
+                    .corner_radius(egui::CornerRadius::same(8))
+                    .show(ui, |ui| self.draw(ui));
+            });
+        // The panel rectangle feeds the host's input region next frame, so only
+        // the panel is clickable and the rest stays click-through (T-166).
+        self.panel_rect = Some(area.response.rect);
     }
 
-    fn wants_pointer(&self) -> bool {
-        // The pointer is captured only to receive the dismissing click (ADR-15).
-        matches!(self.phase, Phase::Results(_))
+    fn interactive_rect(&self) -> Option<egui::Rect> {
+        // Only the results panel needs the pointer (to dismiss, ADR-15); while
+        // capturing the whole surface stays click-through so text selection in
+        // the app underneath is unaffected (ADR-14, T-166).
+        if matches!(self.phase, Phase::Results(_)) { self.panel_rect } else { None }
     }
 
     fn should_exit(&self) -> bool {

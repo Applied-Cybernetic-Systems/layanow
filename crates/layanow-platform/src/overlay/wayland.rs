@@ -104,9 +104,10 @@ pub fn run(app: impl OverlayApp + 'static) -> Result<(), OverlayError> {
         raw_input: egui::RawInput::default(),
         modifiers: egui::Modifiers::NONE,
         dirty,
-        // Start as if captured so the first frame installs the empty input
+        // Start uninitialised so the first tick installs the empty input
         // region (click-through, ADR-14).
-        pointer_captured: true,
+        input_rect: None,
+        input_region_set: false,
         visible: false,
         needs_clear: false,
         width: 0,
@@ -187,7 +188,11 @@ struct Host {
     raw_input: egui::RawInput,
     modifiers: egui::Modifiers,
     dirty: Arc<AtomicBool>,
-    pointer_captured: bool,
+    /// The input region applied last frame, in surface coordinates, and whether
+    /// one has been applied yet. Only the UI panel is interactive; everything
+    /// else is click-through (T-166).
+    input_rect: Option<(i32, i32, i32, i32)>,
+    input_region_set: bool,
     visible: bool,
     needs_clear: bool,
     width: u32,
@@ -324,25 +329,44 @@ impl Host {
         self.dirty.store(true, Ordering::Relaxed);
     }
 
-    /// Mirror [`OverlayApp::wants_pointer`] onto the surface's input region.
+    /// Mirror [`OverlayApp::interactive_rect`] onto the surface's input region.
+    ///
+    /// Only the UI panel receives pointer input; every other region stays
+    /// click-through to the application underneath (ADR-14, T-166). A hidden
+    /// overlay is entirely click-through (ADR-34).
     fn apply_input_region(&mut self) -> Result<(), OverlayError> {
-        // A hidden overlay never captures the pointer (ADR-34).
-        let wants = self.app.visible() && self.app.wants_pointer();
-        if wants == self.pointer_captured {
+        let rect = if self.app.visible() {
+            self.app.interactive_rect().map(|rect| self.to_surface_rect(rect))
+        } else {
+            None
+        };
+        if self.input_region_set && rect == self.input_rect {
             return Ok(());
         }
-        self.pointer_captured = wants;
-        if wants {
-            // `None` restores the whole surface as the input region.
-            self.layer.set_input_region(None);
-        } else {
-            // An empty region makes the surface click-through (ADR-14).
-            let region = Region::new(&self.compositor)
-                .map_err(|error| OverlayError::Wayland(error.to_string()))?;
-            self.layer.set_input_region(Some(region.wl_region()));
+        self.input_rect = rect;
+        self.input_region_set = true;
+
+        let region = Region::new(&self.compositor)
+            .map_err(|error| OverlayError::Wayland(error.to_string()))?;
+        if let Some((x, y, width, height)) = rect {
+            region.add(x, y, width, height);
         }
+        self.layer.set_input_region(Some(region.wl_region()));
         self.layer.wl_surface().commit();
         Ok(())
+    }
+
+    /// Convert an egui logical-point rectangle to integer surface coordinates.
+    fn to_surface_rect(&self, rect: egui::Rect) -> (i32, i32, i32, i32) {
+        let scale = self.egui_ctx.pixels_per_point();
+        let min = rect.min * scale;
+        let size = rect.size() * scale;
+        (
+            min.x.round() as i32,
+            min.y.round() as i32,
+            size.x.round().max(0.0) as i32,
+            size.y.round().max(0.0) as i32,
+        )
     }
 
     fn push_key(&mut self, event: &KeyEvent, repeat: bool) {

@@ -42,11 +42,16 @@ pub trait OverlayApp {
     /// Draw one frame.
     fn update(&mut self, ctx: &Context);
 
-    /// Whether the overlay should capture the pointer this frame.
+    /// The area of the surface that should receive pointer input this frame,
+    /// in logical points, or `None` to stay fully click-through.
     ///
-    /// While `false` the layer surface has an empty input region, so clicks and
-    /// scrolls pass through to the application underneath (ADR-14).
-    fn wants_pointer(&self) -> bool;
+    /// The host sets the layer surface's input region to exactly this
+    /// rectangle, so clicks and scrolls outside it pass through to the
+    /// application underneath (ADR-14, T-166). The default is `None`, which
+    /// leaves the whole surface click-through.
+    fn interactive_rect(&self) -> Option<egui::Rect> {
+        None
+    }
 
     /// Whether the host should stop its event loop.
     fn should_exit(&self) -> bool {
