@@ -62,7 +62,7 @@ cargo run -p layanow-app -- toggle  # show/hide · also: show, hide, quit
 - `cargo`, `rustc`, `clippy`, `rustfmt`, `rust-analyzer`
 - `onnxruntime` (used by `ort` via `ORT_DYLIB_PATH`)
 - `at-spi2-core` + `dbus` (accessibility), `wl-clipboard`, `wtype`
-- `wayland`, `wayland-protocols`, `libxkbcommon`, `vulkan-loader`, `mesa`, `libGL`
+- `wayland`, `wayland-protocols`, `libxkbcommon`, `mesa`, `libGL`
 - `pkg-config`, `cmake`, `openssl`
 - the AT-SPI bus started on shell entry + the `layanow-atspi` helper
 

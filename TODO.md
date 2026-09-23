@@ -69,12 +69,11 @@ agents must update it whenever work is started, finished, or newly discovered.
 
 ### Build, CI & packaging
 - **T-150** · 2026-09-22 · ci — Add `cargo audit` to CI (listed in `PLAN.md`, not currently run). (E2)
-- **T-152** · 2026-09-22 · build — Remove dead dev-shell entries: `vulkan-loader` and the `WGPU_BACKEND` export (wgpu/eframe dropped in ADR-31).
 - **T-154** · 2026-09-22 · pkg — Autostart at login (systemd user unit / xdg autostart). (D3)
 - **T-155** · 2026-09-22 · pkg — Distribution/packaging (Nix package for Linux; Windows/macOS later). (D2)
 - **T-156** · 2026-09-22 · pkg — Update mechanism / model version pinning decision. (D5)
 - **T-157** · 2026-09-22 · pkg — Telemetry decision (assumed none). (E9)
-- **T-163** · 2026-09-22 · build — Audit dev-shell dependencies (`wtype`, `at-spi2-core`/`dbus`, `vulkan-loader`) against actual use and remove or justify each.
+- **T-163** · 2026-09-22 · build — Audit dev-shell dependencies (`wtype`, `at-spi2-core`/`dbus`) against actual use and remove or justify each.
 - **T-165** · 2026-09-22 · ci — Keep the `.cargo/config.toml` aliases (`lint`, `gate`) and CI in sync (CI calls the raw commands; the `gate` alias is unused).
 
 ### Docs & maintenance
@@ -117,3 +116,4 @@ _(empty — pick a task from **Open** and move its line here when you start it.)
 - **T-176** · 2026-09-22 · ui — Render the `Question: ` prefix and the question text in different colours. **Closed:** 2026-09-22 · added `theme::shadowed_labelled_text` (a two-colour `LayoutJob` painted with the drop shadow) and used it for the question in both the capturing and results views (prefix `FG4`, question `BLUE`). Shipped in the `feat(ui): two-tone question label (T-176)` commit.
 - **T-167** · 2026-09-22 · app — Add a per-decision request id/cancellation token so a decision that finishes after a hide/show cannot be consumed as a newer one. **Closed:** 2026-09-22 · `Request::Decide` and `Response` now carry a `u64` id; `Overlay` tracks the id of the in-flight decision and drops any reply whose id does not match (the old guard only checked the phase). Added a gated-engine regression test that abandons decision 0, runs decision 1, and asserts the stale reply is ignored. Shipped in the `fix(app): drop stale decision replies by request id (T-167)` commit (ADR-34).
 - **T-151** · 2026-09-22 · ci — Align doc linting with `PLAN.md`. **Closed:** 2026-09-22 · set `missing_docs = "deny"` in the workspace lints (matching `PLAN.md`/`AGENTS.md`) and added `RUSTDOCFLAGS=-D warnings` to the CI docs step; the whole workspace is clean under both. Shipped in the `chore(ci): deny missing docs and rustdoc warnings (T-151)` commit.
+- **T-152** · 2026-09-22 · build — Remove dead dev-shell entries. **Closed:** 2026-09-22 · dropped `vulkan-loader` (unused since ADR-31 replaced eframe/wgpu with the `egui_glow`/glutin host) and the `WGPU_BACKEND` export from `flake.nix`, and updated the README dev-environment list. Shipped in the `chore(build): drop dead vulkan/wgpu dev-shell entries (T-152)` commit.
