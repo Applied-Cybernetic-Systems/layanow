@@ -2,8 +2,7 @@
 //!
 //! Per ADR-1 the model runs on a dedicated thread and the UI talks to it over
 //! channels, so the overlay never blocks on a decision. The worker owns a
-//! [`DecisionEngine`](crate::worker::DecisionEngine) built by an
-//! [`EngineFactory`] and answers one [`Request`](crate::worker::Request) at a
+//! decision engine built by an engine factory and answers one request at a
 //! time.
 //!
 //! The factory indirection is what makes the settings real (T-113/T-117): the

@@ -16,9 +16,10 @@
 //! takes exclusive keyboard interactivity (ADR-26); hiding it again blanks the
 //! surface to transparent while keeping it mapped (unmapping would leave the
 //! layer surface unconfigured and break the next show, T-174). When
-//! [`OverlayApp::wants_pointer`](crate::overlay::OverlayApp::wants_pointer) is
-//! true the input region is restored so a click can dismiss the results
-//! (ADR-15).
+//! [`OverlayApp::interactive_rect`](crate::overlay::OverlayApp::interactive_rect)
+//! returns a rectangle, only that region receives the pointer (so a click can
+//! dismiss the results, ADR-15) and everything else stays click-through
+//! (T-166).
 
 use egui::Context;
 

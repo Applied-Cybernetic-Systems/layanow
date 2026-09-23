@@ -27,12 +27,8 @@ agents must update it whenever work is started, finished, or newly discovered.
 - **T-100** · 2026-09-22 · M4 · platform — X11 selection backend reading PRIMARY via `x11rb`. Deferred by user decision 2026-09-22; Wayland is the only backend for now. (ADR-21, `RESOLVERS.md`)
 
 ### M5 — tray, settings, toggle
-- **T-113** · 2026-09-22 · M5 · app — Checkpoint selector in settings (manual, no auto-routing). (ADR-7/27-C1)
-- **T-114** · 2026-09-22 · M5 · app — int8/fp32 setting; make `Quant` actually select the graph file instead of being metadata. Default stays **fp32**; int8 is opt-in (ADR-36). Lands with the settings menu (T-113). (ADR-7/11/28/36)
-- **T-115** · 2026-09-22 · M5 · app — Confidence threshold setting (default 0.5; warn only, never refuse). (ADR-27-C2)
+- **T-114** · 2026-09-22 · M5 · app — int8/fp32 setting; make `Quant` actually select the graph file instead of being metadata. Default stays **fp32**; int8 is opt-in (ADR-36). Blocked on T-121; the settings window (T-113) is ready to host it. (ADR-7/11/28/36)
 - **T-116** · 2026-09-22 · M5 · app — Probability colour settings.
-- **T-117** · 2026-09-22 · M5 · app — Hot vs on-demand model unload setting. (ADR-11)
-- **T-118** · 2026-09-22 · M5 · app — Persist settings to `~/.config/layanow/config.toml`. The `Settings` model, XDG path, and load/save are implemented, and the checkpoint/threshold are applied at startup; the settings window still needs to write changes. (E5, `OPEN-QUESTIONS.md`)
 
 ### Model
 - **T-121** · 2026-09-22 · model — Confirm int8-vs-fp32 accuracy for the chosen English artifact against ADR-24's bar before offering int8 as an opt-in setting. (ADR-24/28/36)
@@ -57,7 +53,6 @@ agents must update it whenever work is started, finished, or newly discovered.
 - **T-142** · 2026-09-22 · app — Decide and implement history/privacy (local decision log? retention?). (E6)
 - **T-144** · 2026-09-22 · ui — Localization decision (UI English-only in v1?). (E10)
 - **T-168** · 2026-09-22 · app — Verify the live Wayland show/hide end-to-end (surface maps + keyboard grab on `show`, buffer detached + grab released on `hide`); the command path is covered but the visual mapping is not. (ADR-34, T-112)
-- **T-171** · 2026-09-22 · app — Add a `Settings…` entry to the tray menu once a settings surface exists (T-113+); deferred from T-111. (ADR-35)
 - **T-172** · 2026-09-22 · app — Reflect overlay visibility in the tray menu (checked toggle / dynamic label); needs a visibility→tray channel. (ADR-35)
 
 ### Build, CI & packaging
@@ -115,3 +110,8 @@ _(empty — pick a task from **Open** and move its line here when you start it.)
 - **T-169** · 2026-09-22 · platform — Harden the control socket when `XDG_RUNTIME_DIR` is unset. **Closed:** 2026-09-22 · the fallback now lives in a per-uid subdirectory of the temp dir created mode 0700 (refusing a squatting file/symlink), and `bind` restricts the socket itself to 0600. Added a unit test for the directory hardening. Shipped in the `fix(platform): keep the control socket user-private (T-169)` commit (ADR-34).
 - **T-143** · 2026-09-22 · app — Logging via `tracing` (targets, verbosity). **Closed:** 2026-09-22 · added `tracing` to the libraries and a `tracing-subscriber` `EnvFilter` in the binary: `LAYANOW_LOG` (or `RUST_LOG`), default `warn`, with `LAYANOW_DEBUG` as a `layanow=debug` shorthand; replaced every `eprintln!` and the `LAYANOW_DEBUG` gate with `info!`/`warn!`/`error!`/`debug!` events and updated the README. Captured text is never logged. Shipped in the `feat(app): structured logging via tracing (T-143)` commit (E4).
 - **T-166** · 2026-09-22 · overlay — Don't dim the whole screen: paint the translucent backdrop only behind the UI panel and keep every other region transparent and click-through. **Closed:** 2026-09-22 · the overlay is now an auto-sized egui `Area` whose `Frame` carries the translucent backdrop, so only the panel is dimmed; `OverlayApp::wants_pointer` was replaced by `interactive_rect`, and the Wayland host sets the input region to exactly that rectangle (empty otherwise), keeping everything outside the panel click-through. Shipped in the `feat(ui): paint the backdrop only behind the panel (T-166)` commit (ADR-14/31).
+- **T-113** · 2026-09-22 · M5 · app — Checkpoint selector in settings. **Closed:** 2026-09-22 · the `CheckpointSpec` registry (T-173) is offered in the settings window (`layanow settings`); selecting one writes `checkpoint` to `config.toml`, sends `Command::Reload`, and the worker rebuilds the model on its thread. Manual only, no auto-routing. Shipped in the `feat(app): standalone settings window (T-113–T-118/T-171)` commit (ADR-7/38).
+- **T-115** · 2026-09-22 · M5 · app — Confidence threshold setting. **Closed:** 2026-09-22 · `confidence_threshold` (default 0.5) is a slider in the settings window and is applied live to the results panel; it only flags low confidence, never refuses. Shipped in the same commit (ADR-27 C2).
+- **T-117** · 2026-09-22 · M5 · app — Hot vs on-demand model unload setting. **Closed:** 2026-09-22 · `unload = "hot" | "on-demand"` in `config.toml`; the factory-backed worker keeps the engine (hot) or drops it after each decision and reloads on the next (on-demand). Shipped in the same commit (ADR-11).
+- **T-118** · 2026-09-22 · M5 · app — Persist settings to `~/.config/layanow/config.toml`. **Closed:** 2026-09-22 · `Settings` (checkpoint, confidence threshold, unload policy) loads at startup and saves from the settings window; an unknown or invalid file falls back to defaults. Shipped in the same commit (E5).
+- **T-171** · 2026-09-22 · app — Add a `Settings…` entry to the tray menu. **Closed:** 2026-09-22 · the tray menu is now `Toggle overlay`/`Settings…`/`Quit`; `Settings…` spawns `layanow settings`. Shipped in the same commit (ADR-35/38).

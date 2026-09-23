@@ -43,6 +43,8 @@ fn init_tracing() {
 enum Invocation {
     /// Run the resident applet.
     Applet,
+    /// Open the standalone settings window.
+    Settings,
     /// Forward a command to a running applet.
     Command(Command),
 }
@@ -53,6 +55,7 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
     };
     match invocation {
         Invocation::Applet => run_applet(),
+        Invocation::Settings => layanow_app::settings_window::run(),
         Invocation::Command(command) => {
             control::send(command)?;
             Ok(())
@@ -70,6 +73,7 @@ fn parse_args(args: impl Iterator<Item = String>) -> std::io::Result<Option<Invo
             print_help();
             Ok(None)
         }
+        [word] if word == "settings" => Ok(Some(Invocation::Settings)),
         [word] => Command::parse(word)
             .map(|command| Some(Invocation::Command(command)))
             .map_err(|_| invalid(format!("unknown command {word:?}; try --help"))),
@@ -92,6 +96,7 @@ fn print_help() {
            layanow show       show the overlay\n\
            layanow hide       hide the overlay\n\
            layanow quit       stop the running applet\n\
+           layanow settings   open the settings window\n\
            layanow --help     print this help"
     );
 }

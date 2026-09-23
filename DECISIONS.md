@@ -437,3 +437,27 @@ is fp16 weights (≈3900 ms/decision on CPU software emulation) and
 settings toggle (T-113). A replaced or corrupted community export is caught by
 the manifest digest check (ADR-17). The layout is data, so a better export can
 replace it without code changes. int8 stays opt-in and gated on T-121.
+
+## ADR-38 — Settings is a separate `layanow settings` process
+**Decision:** The settings UI (checkpoint, confidence threshold, unload policy;
+T-113/T-115/T-117) is a standalone process, opened by `layanow settings` or
+spawned by the tray's **Settings…** item (T-171). It is a normal `xdg_toplevel`
+rendered with `eframe`/`glow`, with its own event loop. It edits
+`~/.config/layanow/config.toml` and then sends `Command::Reload` to the resident
+applet, which re-reads the file and applies the change; the file is the single
+source of truth, so no bidirectional IPC is needed. A named control channel
+(`layanow-settings`) keeps it to one window.
+**Why:** The overlay is a raw `wlr-layer-shell` client with a hand-rolled event
+loop (ADR-31); a second event loop cannot run inside it portably, and winit's
+event loop has thread-affinity limits. A separate process sidesteps both, and
+because it uses portable eframe it will work on Windows/macOS before their
+overlay hosts exist. Keeping the config file authoritative avoids a get/set
+protocol.
+**Consequence:** `eframe`/`glow` returns to the dependency tree for the settings
+window only (the overlay keeps the layer-shell host); no `wgpu`. Settings are
+applied live via `Command::Reload`: the confidence threshold changes
+immediately, and a checkpoint change rebuilds the model on the worker thread
+(never the overlay loop) through the factory added in T-113/T-117, with the
+on-demand policy dropping it after each decision. The worker's eager load moved
+off the startup path, so the applet now starts before the model is ready (a load
+failure surfaces on the first decision / in the log rather than at launch).

@@ -1,7 +1,7 @@
 //! User settings persisted to `~/.config/layanow/config.toml` (T-118, E5).
 //!
-//! The file is optional: a missing or invalid file falls back to [`Settings::default`]
-//! and logs a warning, so the applet always starts.
+//! The file is optional: a missing or invalid file falls back to the default
+//! settings and logs a warning, so the applet always starts.
 
 use std::path::PathBuf;
 

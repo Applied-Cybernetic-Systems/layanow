@@ -129,8 +129,24 @@ pub fn send(command: Command) -> Result<(), ControlError> {
 /// calls this after its event loop returns. A no-op on Windows, where the named
 /// pipe disappears with the process.
 pub fn cleanup() {
+    cleanup_named(DEFAULT_ID);
+}
+
+/// Acquire the single-instance lock for a named control channel.
+///
+/// Used by the settings window, which needs the lock but does not consume
+/// commands. Keep the returned [`Control`] alive for the process lifetime.
+///
+/// # Errors
+/// Returns [`ControlError::AlreadyRunning`] if another process owns `id`.
+pub fn claim(id: &str) -> Result<Control, ControlError> {
+    start_with(id)
+}
+
+/// Remove a named control socket (see [`cleanup`]).
+pub fn cleanup_named(id: &str) {
     #[cfg(unix)]
-    if let Ok(path) = socket_path(DEFAULT_ID) {
+    if let Ok(path) = socket_path(id) {
         drop(std::fs::remove_file(path));
     }
 }

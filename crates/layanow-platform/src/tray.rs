@@ -20,6 +20,8 @@ const ICON_PNG: &[u8] = include_bytes!("../assets/layanow.png");
 
 /// Menu id for "Toggle overlay".
 const TOGGLE_ID: &str = "toggle";
+/// Menu id for "Settings…".
+const SETTINGS_ID: &str = "settings";
 /// Menu id for "Quit".
 const QUIT_ID: &str = "quit";
 
@@ -48,13 +50,17 @@ pub enum TrayError {
 pub fn start(commands: Sender<Command>) -> Result<TrayIcon, TrayError> {
     let menu = Menu::new();
     let toggle = MenuItem::with_id(TOGGLE_ID, "Toggle overlay", true, None);
+    let settings = MenuItem::with_id(SETTINGS_ID, "Settings…", true, None);
     let quit = MenuItem::with_id(QUIT_ID, "Quit", true, None);
-    menu.append_items(&[&toggle, &quit])?;
+    menu.append_items(&[&toggle, &settings, &quit])?;
 
     let menu_sender = commands.clone();
-    MenuEvent::set_event_handler(Some(move |event: MenuEvent| {
-        if let Some(command) = command_for_id(event.id().0.as_str()) {
-            let _ = menu_sender.send(command);
+    MenuEvent::set_event_handler(Some(move |event: MenuEvent| match event.id().0.as_str() {
+        SETTINGS_ID => spawn_settings_window(),
+        id => {
+            if let Some(command) = command_for_id(id) {
+                let _ = menu_sender.send(command);
+            }
         }
     }));
 
@@ -84,6 +90,22 @@ fn command_for_id(id: &str) -> Option<Command> {
         TOGGLE_ID => Some(Command::Toggle),
         QUIT_ID => Some(Command::Quit),
         _ => None,
+    }
+}
+
+/// Open the standalone settings window in a new process (T-171).
+///
+/// The settings window owns an eframe event loop, so it cannot share this
+/// applet's layer-shell loop; its named control channel keeps it to a single
+/// instance.
+fn spawn_settings_window() {
+    match std::env::current_exe() {
+        Ok(executable) => {
+            if let Err(error) = std::process::Command::new(executable).arg("settings").spawn() {
+                tracing::warn!(%error, "could not open the settings window");
+            }
+        }
+        Err(error) => tracing::warn!(%error, "could not locate the layanow executable"),
     }
 }
 

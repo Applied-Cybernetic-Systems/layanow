@@ -30,15 +30,19 @@ remain.
 M5 in progress: the applet is now **resident** and starts **hidden** (ADR-34).
 Run it once, then a compositor bind (or `layanow toggle`) shows the overlay;
 `Esc` hides it and `layanow quit` stops the applet. A **tray icon** (ADR-35)
-offers Toggle/Quit and a left click toggles. The control channel is a
-cross-platform local socket (Unix domain socket / Windows named pipe) that also
-enforces a single instance. Settings are next.
+offers Toggle/Quit and a left click toggles. A standalone **settings window**
+(`layanow settings`, or the tray's **Settings…**) chooses the checkpoint, the
+low-confidence threshold, and hot vs on-demand model residency; it writes
+`~/.config/layanow/config.toml` and the applet applies the change live
+(ADR-38). The control channel is a cross-platform local socket (Unix domain
+socket / Windows named pipe) that also enforces a single instance.
 
 ```sh
 nix develop
 cargo run -p layanow-app            # resident applet; overlay starts hidden
 # in another terminal, or a compositor bind:
 cargo run -p layanow-app -- toggle  # show/hide · also: show, hide, quit
+cargo run -p layanow-app -- settings  # open the settings window
 # highlight text (or type), Tab to add · Enter to decide · Esc: hide
 ```
 

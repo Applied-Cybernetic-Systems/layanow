@@ -18,3 +18,6 @@ pub mod theme;
 
 /// Persisted user settings (`~/.config/layanow/config.toml`, T-118).
 pub mod settings;
+
+/// The standalone settings window (T-113/T-115/T-117).
+pub mod settings_window;
