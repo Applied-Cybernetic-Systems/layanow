@@ -16,6 +16,8 @@ use layanow_model::RankedAnswer;
 pub enum Request {
     /// Run one `choice` decision.
     Decide {
+        /// Caller-assigned decision id, echoed on the reply.
+        id: u64,
         /// The question text.
         question: String,
         /// The candidate answers, in capture order.
@@ -27,9 +29,19 @@ pub enum Request {
 #[derive(Debug, Clone, PartialEq)]
 pub enum Response {
     /// Ranked answers (highest probability first).
-    Ranked(Vec<RankedAnswer>),
+    Ranked {
+        /// The id of the decision this replies to.
+        id: u64,
+        /// The ranked answers.
+        ranked: Vec<RankedAnswer>,
+    },
     /// The decision failed; the string is user-facing.
-    Failed(String),
+    Failed {
+        /// The id of the decision this replies to.
+        id: u64,
+        /// The failure message.
+        error: String,
+    },
 }
 
 /// The inference backend the worker drives.
@@ -86,12 +98,20 @@ impl Worker {
         Self { requests: Some(requests), responses, handle: Some(handle) }
     }
 
-    /// Ask the worker to run a decision. Returns immediately.
-    pub fn decide(&self, question: String, answers: Vec<String>) -> Result<(), WorkerGone> {
+    /// Ask the worker to run a decision `id`. Returns immediately.
+    ///
+    /// `id` is echoed on the matching [`Response`] so the caller can tell a
+    /// reply for an abandoned decision from one for the current decision.
+    pub fn decide(
+        &self,
+        id: u64,
+        question: String,
+        answers: Vec<String>,
+    ) -> Result<(), WorkerGone> {
         self.requests
             .as_ref()
             .ok_or(WorkerGone)?
-            .send(Request::Decide { question, answers })
+            .send(Request::Decide { id, question, answers })
             .map_err(|_| WorkerGone)
     }
 
@@ -126,10 +146,10 @@ fn run(
     responses: &Sender<Response>,
 ) {
     while let Ok(request) = requests.recv() {
-        let Request::Decide { question, answers } = request;
+        let Request::Decide { id, question, answers } = request;
         let response = match engine.decide_choice(&question, &answers) {
-            Ok(ranked) => Response::Ranked(ranked),
-            Err(error) => Response::Failed(error),
+            Ok(ranked) => Response::Ranked { id, ranked },
+            Err(error) => Response::Failed { id, error },
         };
         if responses.send(response).is_err() {
             break;
@@ -179,10 +199,11 @@ mod tests {
     #[test]
     fn worker_returns_ranked_answers() {
         let worker = Worker::spawn(ByLength);
-        worker.decide("q".to_string(), vec!["aa".to_string(), "b".to_string()]).unwrap();
-        let Response::Ranked(ranked) = worker.recv().unwrap() else {
+        worker.decide(7, "q".to_string(), vec!["aa".to_string(), "b".to_string()]).unwrap();
+        let Response::Ranked { id, ranked } = worker.recv().unwrap() else {
             panic!("expected ranked answers");
         };
+        assert_eq!(id, 7);
         assert_eq!(ranked[0].text, "aa");
         assert_eq!(ranked[1].text, "b");
     }
@@ -190,7 +211,10 @@ mod tests {
     #[test]
     fn worker_propagates_failures() {
         let worker = Worker::spawn(Broken);
-        worker.decide("q".to_string(), vec!["a".to_string()]).unwrap();
-        assert_eq!(worker.recv().unwrap(), Response::Failed("no model".to_string()));
+        worker.decide(3, "q".to_string(), vec!["a".to_string()]).unwrap();
+        assert_eq!(
+            worker.recv().unwrap(),
+            Response::Failed { id: 3, error: "no model".to_string() }
+        );
     }
 }

@@ -60,6 +60,12 @@ pub struct Overlay {
     status: Option<String>,
     /// Freely typed item text, captured when `Tab` is pressed.
     entry: String,
+    /// The id assigned to the next decision.
+    next_request: u64,
+    /// The id of the decision currently in flight, if any. A reply whose id
+    /// does not match is stale (the decision it belongs to was dismissed) and
+    /// is dropped (T-167).
+    pending_request: Option<u64>,
     /// Whether the overlay is shown; starts hidden (ADR-34).
     visible: bool,
     exit: bool,
@@ -83,6 +89,8 @@ impl Overlay {
             threshold: DEFAULT_CONFIDENCE_THRESHOLD,
             status: None,
             entry: String::new(),
+            next_request: 0,
+            pending_request: None,
             visible: false,
             exit: false,
         }
@@ -158,27 +166,42 @@ impl Overlay {
             return;
         };
         let answers = self.session.answer_texts();
-        self.phase = match self.worker.decide(question, answers) {
-            Ok(()) => Phase::Running,
-            Err(error) => Phase::Error(error.to_string()),
+        // Each decision gets a fresh id so a reply for an abandoned decision
+        // cannot be mistaken for the current one (T-167).
+        let id = self.next_request;
+        self.next_request = self.next_request.wrapping_add(1);
+        self.phase = match self.worker.decide(id, question, answers) {
+            Ok(()) => {
+                self.pending_request = Some(id);
+                Phase::Running
+            }
+            Err(error) => {
+                self.pending_request = None;
+                Phase::Error(error.to_string())
+            }
         };
     }
 
     /// Take the worker's reply, if any.
     ///
-    /// Replies that arrive after the session was dismissed (e.g. while the
-    /// overlay was hidden mid-decision) are dropped, so stale results cannot
-    /// reappear.
+    /// A reply is accepted only if its id matches the decision currently in
+    /// flight. Replies for a decision that was abandoned (e.g. the overlay was
+    /// hidden mid-decision) no longer match and are dropped, so stale results
+    /// cannot reappear (T-167).
     fn poll_worker(&mut self) {
         while let Some(response) = self.worker.try_recv() {
-            if !matches!(self.phase, Phase::Running) {
+            let id = match &response {
+                Response::Ranked { id, .. } | Response::Failed { id, .. } => *id,
+            };
+            if Some(id) != self.pending_request {
                 continue;
             }
+            self.pending_request = None;
             self.phase = match response {
-                Response::Ranked(ranked) => {
+                Response::Ranked { ranked, .. } => {
                     Phase::Results(Box::new(results::results(&ranked, self.threshold)))
                 }
-                Response::Failed(error) => Phase::Error(error),
+                Response::Failed { error, .. } => Phase::Error(error),
             };
         }
     }
@@ -186,6 +209,7 @@ impl Overlay {
     /// Clear everything and return to capturing (`Esc`, or a click on results).
     fn dismiss(&mut self) {
         self.phase = Phase::Capturing;
+        self.pending_request = None;
         self.session.clear();
         self.status = None;
         self.entry.clear();
@@ -442,6 +466,34 @@ mod tests {
         }
     }
 
+    /// An engine that blocks each decision until the test releases it, so
+    /// replies can be forced to arrive after the overlay moved on.
+    struct Gated {
+        started: std::sync::mpsc::Sender<()>,
+        release: std::sync::mpsc::Receiver<()>,
+    }
+
+    impl DecisionEngine for Gated {
+        fn decide_choice(
+            &mut self,
+            _question: &str,
+            answers: &[String],
+        ) -> Result<Vec<RankedAnswer>, String> {
+            self.started.send(()).expect("started");
+            self.release.recv().expect("release");
+            Ok(answers
+                .iter()
+                .enumerate()
+                .map(|(index, text)| RankedAnswer {
+                    index,
+                    text: text.clone(),
+                    probability: if index == 0 { 0.9 } else { 0.1 },
+                    confidence: 0.5,
+                })
+                .collect())
+        }
+    }
+
     fn overlay_with(engine: impl DecisionEngine) -> (Overlay, TestResolver) {
         let resolver = TestResolver::default();
         let (_commands_tx, commands) = crossbeam_channel::unbounded();
@@ -616,6 +668,54 @@ mod tests {
         assert!(overlay.status.is_none());
         assert!(overlay.entry.is_empty());
         assert!(matches!(overlay.phase, Phase::Capturing));
+    }
+
+    #[test]
+    fn a_stale_reply_is_not_consumed_as_the_current_decision() {
+        let (started_tx, started_rx) = std::sync::mpsc::channel();
+        let (release_tx, release_rx) = std::sync::mpsc::channel();
+        let resolver = TestResolver::default();
+        let (_commands_tx, commands) = crossbeam_channel::unbounded();
+        let mut overlay = Overlay::new(
+            Worker::spawn(Gated { started: started_tx, release: release_rx }),
+            Box::new(resolver.clone()),
+            commands,
+        );
+
+        // First decision (id 0) blocks in the engine.
+        for text in ["q1", "a1"] {
+            resolver.set(text);
+            overlay.capture_item();
+        }
+        overlay.decide();
+        started_rx.recv().expect("first decision started");
+
+        // Abandon it, then run a second decision (id 1).
+        overlay.dismiss();
+        for text in ["q2", "a2"] {
+            resolver.set(text);
+            overlay.capture_item();
+        }
+        overlay.decide();
+        assert!(matches!(overlay.phase, Phase::Running));
+
+        // Releasing the first decision lets the worker send its reply and then
+        // start the second; once the second start is observed, the stale reply
+        // is already queued.
+        release_tx.send(()).expect("release first");
+        started_rx.recv().expect("second decision started");
+        overlay.poll_worker();
+        assert!(
+            matches!(overlay.phase, Phase::Running),
+            "the abandoned decision's reply must be dropped"
+        );
+
+        release_tx.send(()).expect("release second");
+        wait_for_reply(&mut overlay);
+        let Phase::Results(panel) = &overlay.phase else {
+            panic!("expected results");
+        };
+        assert_eq!(panel.rows[0].text, "a2", "results must be for the current decision");
     }
 
     #[test]

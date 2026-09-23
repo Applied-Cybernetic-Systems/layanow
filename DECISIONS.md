@@ -367,9 +367,10 @@ visual show/hide against a live compositor is not yet exercised. Process exit
 does not run the control thread's destructor, so the applet unlinks the socket
 on a clean exit (`control::cleanup`) and `bind` reclaims a stale file otherwise.
 A decision that is in flight when the overlay is hidden has its late reply
-dropped so stale results cannot reappear; a fully general cancellation token is
-deferred. The tray and settings (T-111/T-113+) attach to the same command
-stream.
+dropped so stale results cannot reappear; each decision now carries a
+monotonic id and the overlay accepts only the reply matching the in-flight id
+(T-167, superseding the earlier phase-only guard). The tray and settings
+(T-111/T-113+) attach to the same command stream.
 
 ## ADR-35 — Tray icon uses `tray-icon`'s `ksni` backend on Linux
 **Decision:** The system tray is `tray-icon` (ADR-20). On Linux it is built
