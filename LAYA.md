@@ -136,9 +136,22 @@ the default; ADR-36 makes int8 opt-in there too (T-114).
 
 ## Getting the ONNX files
 
-### Ready-made (English)
-`receptron/laya-onnx` — `laya.onnx` (+ `laya_config.json`, `tokenizer/`).
-Alternative: `Mattepiu/laya-onnx` (includes `laya_int8.onnx`).
+The known exports are described by the `CheckpointSpec` registry in
+`layanow-model` (`bundle.rs`); each spec records the repo and the bundle layout
+(ADR-37). The app downloads and digest-verifies only the selected one (ADR-17).
+
+### Ready-made (English, default)
+`receptron/laya-onnx` — `laya.onnx` + `laya.onnx.data` (+ `laya_config.json`,
+`tokenizer/`), fp32. (The old `Mattepiu/laya-onnx` int8 alternative is unverified
+and not in the registry.)
+
+### Ready-made (multilingual)
+`soyelmismo/laya-multilingual-onnx` — `model-fp32.onnx` (mmBERT-base, fp32) +
+`rl_agent_config.json` + `tokenizer/`. Verified end-to-end (download → manifest
+digest → `ort` load → 3-option `choice`). The repo also ships a selective
+`model-int8.onnx`, which is **not** in the registry (int8 stays opt-in and is
+gated on T-121). `mizchi/laya-multilingual-onnx` has the same layout but fp16
+weights (~3900 ms/decision on CPU) and is not used.
 
 ### Exporting a checkpoint yourself (multilingual / typed-decisions)
 Build-time only; Python + torch never shipped. Driven by

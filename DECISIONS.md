@@ -413,3 +413,27 @@ been measured (T-121).
 **Consequence:** `AGENTS.md`/`PLAN.md`/`OPEN-QUESTIONS.md`/`LAYA.md` no longer
 describe an English int8 default. `Quant` stays metadata-only until T-114 makes
 it select the graph file.
+
+## ADR-37 — Checkpoint registry; multilingual ONNX is a community export
+**Decision:** Checkpoints are described by a `CheckpointSpec` registry
+(`layanow_model::bundle`), each recording its Hugging Face repo and bundle layout
+(graph file, optional external weights, calibration config, tokenizer
+ directory). The registry ships two entries: `english` (default,
+`receptron/laya-onnx`, fp32) and `multilingual`
+(`soyelmismo/laya-multilingual-onnx`, fp32 `model-fp32.onnx`). We do **not**
+point `DEFAULT_REPO` at the canonical `convaiinnovations/laya` hub: that repo
+publishes the *source* checkpoints as safetensors, not ONNX, so `ort` cannot
+load it directly.
+**Why:** T-173. The hub is canonical but contains no ONNX artifacts for any
+checkpoint; switching would require us to export and host ~0.7–1.7 GB graphs
+ourselves. The community multilingual export matches our graph contract (same
+`input_ids`/`attention_mask`/`marker_pos`/`marker_mask`/`qtype` inputs and an
+fp32 `logits` output) and was verified end-to-end: it downloads and verifies
+against the Hugging Face manifest, loads through `ort`, and ranks a 3-option
+`choice` correctly. The alternatives were rejected: `mizchi/laya-multilingual-onnx`
+is fp16 weights (≈3900 ms/decision on CPU software emulation) and
+`sevenreasons/laya-onnx-fp16` is an English fp16 export.
+**Consequence:** English fp32 stays the default (ADR-36); multilingual is a
+settings toggle (T-113). A replaced or corrupted community export is caught by
+the manifest digest check (ADR-17). The layout is data, so a better export can
+replace it without code changes. int8 stays opt-in and gated on T-121.

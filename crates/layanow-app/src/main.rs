@@ -9,8 +9,9 @@
 #![cfg_attr(test, allow(clippy::unwrap_used, clippy::expect_used, clippy::panic))]
 
 use layanow_app::overlay::Overlay;
+use layanow_app::settings::Settings;
 use layanow_app::worker::Worker;
-use layanow_model::{Decider, Quant, bundle};
+use layanow_model::{Decider, bundle};
 use layanow_platform::control::{self, Command, ControlError};
 
 fn main() {
@@ -116,9 +117,12 @@ fn run_applet() -> Result<(), Box<dyn std::error::Error>> {
             None
         }
     };
-    let worker = load_worker()?;
+    let settings = Settings::load();
+    let worker = load_worker(&settings)?;
     let resolver = layanow_platform::selection::resolver();
-    let result = layanow_platform::overlay::run(Overlay::new(worker, resolver, control.receiver));
+    let mut overlay = Overlay::new(worker, resolver, control.receiver);
+    overlay.set_threshold(settings.confidence_threshold);
+    let result = layanow_platform::overlay::run(overlay);
     // Process exit does not run the control thread's destructor, so unlink the
     // socket explicitly on a clean exit.
     control::cleanup();
@@ -126,13 +130,24 @@ fn run_applet() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
-/// Load the default checkpoint and start the inference worker.
+/// Load the checkpoint chosen in settings (falling back to the default) and
+/// start the inference worker.
 ///
 /// Weights are downloaded on first use when `LAYANOW_ALLOW_MODEL_DOWNLOAD`
 /// is set (ADR-17); otherwise a cached bundle is required.
-fn load_worker() -> Result<Worker, Box<dyn std::error::Error>> {
-    let dir = bundle::ensure_bundle()?;
-    tracing::info!(path = %dir.display(), "using bundle");
-    let checkpoint = bundle::checkpoint_from_dir(bundle::DEFAULT_REPO, &dir, Quant::Fp32)?;
+fn load_worker(settings: &Settings) -> Result<Worker, Box<dyn std::error::Error>> {
+    let spec = bundle::checkpoint(&settings.checkpoint)
+        .or_else(|| bundle::checkpoint(bundle::DEFAULT_ID))
+        .ok_or("no checkpoints are registered")?;
+    if spec.id != settings.checkpoint {
+        tracing::warn!(
+            requested = %settings.checkpoint,
+            using = spec.id,
+            "unknown checkpoint; using the default"
+        );
+    }
+    let dir = bundle::ensure_bundle(spec)?;
+    tracing::info!(checkpoint = spec.id, path = %dir.display(), "using bundle");
+    let checkpoint = bundle::checkpoint_from_dir(spec, &dir)?;
     Ok(Worker::spawn(Decider::load(&checkpoint)?))
 }

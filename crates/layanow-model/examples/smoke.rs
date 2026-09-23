@@ -9,14 +9,15 @@
 //! cargo run -p layanow-model --example smoke
 //! ```
 
-use layanow_model::{Decider, Quant, bundle};
+use layanow_model::{Decider, bundle};
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let dir = bundle::ensure_bundle()?;
+    let spec = &bundle::ENGLISH;
+    let dir = bundle::ensure_bundle(spec)?;
     eprintln!("using bundle at {}", dir.display());
     println!("{}", bundle::ATTRIBUTION);
 
-    let checkpoint = bundle::checkpoint_from_dir("receptron/laya-onnx", &dir, Quant::Fp32)?;
+    let checkpoint = bundle::checkpoint_from_dir(spec, &dir)?;
     let mut decider = Decider::load(&checkpoint)?;
 
     let question = "Which planet is known as the Red Planet?";

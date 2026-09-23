@@ -10,15 +10,14 @@
 
 #![cfg_attr(test, allow(clippy::unwrap_used, clippy::expect_used, clippy::panic))]
 
-use layanow_model::{Decider, ModelError, Quant, bundle};
+use layanow_model::{Decider, ModelError, bundle};
 
 #[test]
 #[ignore = "needs the Laya ONNX bundle; set LAYANOW_ALLOW_MODEL_DOWNLOAD=1 to fetch it"]
 fn three_option_choice_is_plausible() {
-    let dir = bundle::ensure_bundle().expect("bundle unavailable");
-    bundle::verify_bundle_from("receptron/laya-onnx", &dir).expect("bundle integrity");
-    let checkpoint =
-        bundle::checkpoint_from_dir("receptron/laya-onnx", &dir, Quant::Fp32).expect("descriptor");
+    let dir = bundle::ensure_bundle(&bundle::ENGLISH).expect("bundle unavailable");
+    bundle::verify_bundle_from(&bundle::ENGLISH, &dir).expect("bundle integrity");
+    let checkpoint = bundle::checkpoint_from_dir(&bundle::ENGLISH, &dir).expect("descriptor");
     let mut decider = Decider::load(&checkpoint).expect("load session");
 
     let answers = vec!["Venus".to_string(), "Mars".to_string(), "Jupiter".to_string()];
@@ -34,11 +33,29 @@ fn three_option_choice_is_plausible() {
 }
 
 #[test]
+#[ignore = "needs the multilingual ONNX bundle; set LAYANOW_ALLOW_MODEL_DOWNLOAD=1 to fetch it"]
+fn multilingual_choice_is_plausible() {
+    let dir = bundle::ensure_bundle(&bundle::MULTILINGUAL).expect("bundle unavailable");
+    let checkpoint = bundle::checkpoint_from_dir(&bundle::MULTILINGUAL, &dir).expect("descriptor");
+    let mut decider = Decider::load(&checkpoint).expect("load session");
+
+    let answers = vec!["Venus".to_string(), "Mars".to_string(), "Jupiter".to_string()];
+    let ranked = decider
+        .decide_choice("{}", "Which planet is known as the Red Planet?", &answers)
+        .expect("decision");
+
+    assert_eq!(ranked.len(), 3);
+    let total: f32 = ranked.iter().map(|answer| answer.probability).sum();
+    assert!((total - 1.0).abs() < 1e-3, "probabilities sum to {total}");
+    assert_eq!(ranked[0].text, "Mars");
+}
+
+#[test]
 #[ignore = "needs network to read the model manifest"]
 fn missing_files_fail_verification() {
     // An empty directory can never match the manifest's sizes/digests.
     let dir = std::env::temp_dir().join(format!("layanow-verify-{}", std::process::id()));
     std::fs::create_dir_all(&dir).unwrap();
-    let result = bundle::verify_bundle_from("receptron/laya-onnx", &dir);
+    let result = bundle::verify_bundle_from(&bundle::ENGLISH, &dir);
     assert!(matches!(result, Err(ModelError::ChecksumMismatch { .. })));
 }

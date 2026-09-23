@@ -106,6 +106,11 @@ impl Overlay {
         }
     }
 
+    /// Override the low-confidence threshold (from settings, T-115).
+    pub fn set_threshold(&mut self, threshold: f32) {
+        self.threshold = threshold;
+    }
+
     /// Capture one item on `Tab`: the typed entry if there is one, otherwise
     /// the current native (PRIMARY) selection (ADR-33).
     ///

@@ -1,10 +1,14 @@
-//! Loading of a checkpoint's `laya_config.json`.
+//! Loading of a checkpoint's calibration config.
+//!
+//! Both the official `laya_config.json` and the source `rl_agent_config.json`
+//! carry the `max_len`, `head_max_len`, `temperature` and
+//! `temperature_by_options` keys read here (T-173); extra keys are ignored.
 
 use std::path::Path;
 
 use crate::{LayaConfig, error::ModelError};
 
-/// Parse `laya_config.json` from `path`.
+/// Parse a checkpoint config (`laya_config.json`/`rl_agent_config.json`).
 pub fn load(path: &Path) -> Result<LayaConfig, ModelError> {
     let text = std::fs::read_to_string(path)?;
     let value: serde_json::Value = serde_json::from_str(&text)

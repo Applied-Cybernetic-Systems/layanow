@@ -26,9 +26,8 @@ pub use error::ModelError;
 
 /// Weight precision of a checkpoint.
 ///
-/// v1 ships one graph per bundle directory; `quant` records the intended
-/// precision (the bundle chooses which file to place at `laya.onnx`). See
-/// [`bundle::checkpoint_from_dir`].
+/// The bundle chooses which graph file to place at the spec's `graph` path;
+/// `quant` records the intended precision. See [`bundle::checkpoint_from_dir`].
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Quant {
     /// 8-bit quantized weights (smaller footprint; opt-in per ADR-28).

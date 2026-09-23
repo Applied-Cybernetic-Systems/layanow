@@ -32,15 +32,15 @@ agents must update it whenever work is started, finished, or newly discovered.
 - **T-115** · 2026-09-22 · M5 · app — Confidence threshold setting (default 0.5; warn only, never refuse). (ADR-27-C2)
 - **T-116** · 2026-09-22 · M5 · app — Probability colour settings.
 - **T-117** · 2026-09-22 · M5 · app — Hot vs on-demand model unload setting. (ADR-11)
-- **T-118** · 2026-09-22 · M5 · app — Persist settings to `~/.config/layanow/config.toml` (taplo is in the dev shell). (E5, `OPEN-QUESTIONS.md`)
+- **T-118** · 2026-09-22 · M5 · app — Persist settings to `~/.config/layanow/config.toml`. The `Settings` model, XDG path, and load/save are implemented, and the checkpoint/threshold are applied at startup; the settings window still needs to write changes. (E5, `OPEN-QUESTIONS.md`)
 
 ### Model
 - **T-121** · 2026-09-22 · model — Confirm int8-vs-fp32 accuracy for the chosen English artifact against ADR-24's bar before offering int8 as an opt-in setting. (ADR-24/28/36)
-- **T-122** · 2026-09-22 · model — Checkpoint registry with lazy load + LRU eviction (one session resident); today only `DEFAULT_REPO` is wired and it loads eagerly. (`LAYA.md`)
+- **T-122** · 2026-09-22 · model — Checkpoint registry with lazy load + LRU eviction (one session resident). A `CheckpointSpec` registry and settings-driven selection landed (T-173); the session is still loaded once at startup and is not yet cached/reloaded on a settings change. (`LAYA.md`)
 - **T-123** · 2026-09-22 · model — Multi-answer (`choice`) support: mark options above a probability threshold. (ADR-8/27-C6)
 - **T-124** · 2026-09-22 · model — Optional checkpoint auto-routing (port Laya's `Router`). (ADR-7, v2+)
 - **T-125** · 2026-09-22 · model — Map `ModelError` variants to actionable, user-facing messages instead of a raw `to_string()` handed to the UI. (ADR-18)
-- **T-173** · 2026-09-22 · model — Align `DEFAULT_REPO` with the consolidated hub: we ship `receptron/laya-onnx`, but Laya now publishes all three checkpoints under `convaiinnovations/laya` (subfolders). Decide whether to switch the default repo/subfolder and update the manifest. (`bundle.rs`, `LAYA.md`)
+- **T-173** · 2026-09-22 · model — Align `DEFAULT_REPO` with the consolidated hub. **Closed:** 2026-09-22 · decision (ADR-37): keep `receptron/laya-onnx` as the default English fp32 ONNX and add the community `soyelmismo/laya-multilingual-onnx` fp32 export for multilingual, behind a new `CheckpointSpec` registry. The `convaiinnovations/laya` hub publishes safetensors, not ONNX, so it cannot be loaded directly. Verified the multilingual export end-to-end: it downloads/verifies through the Hugging Face manifest, loads in `ort`, and ranks a 3-option `choice` correctly. Shipped in the `feat(model): checkpoint registry and multilingual ONNX source (T-173)` commit (`bundle.rs`, `LAYA.md`).
 
 ### Capture & resolvers
 - **T-130** · 2026-09-22 · resolve — Move the PRIMARY read off the UI thread (blocking `get_contents` currently runs inside `update`; a stalled owner freezes the overlay). (ADR-33)

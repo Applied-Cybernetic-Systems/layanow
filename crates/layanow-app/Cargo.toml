@@ -25,6 +25,9 @@ crossbeam-channel = "0.5"
 # only emit events.
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+# Persist user settings to `~/.config/layanow/config.toml` (T-118).
+serde = { version = "1", features = ["derive"] }
+toml = "0.9"
 
 [lints]
 workspace = true

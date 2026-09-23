@@ -24,7 +24,17 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         _ => Quant::Fp32,
     };
 
-    let checkpoint = bundle::checkpoint_from_dir("laya-multilingual", &dir, quant)?;
+    let spec = bundle::CheckpointSpec {
+        id: "local-multilingual",
+        name: "laya-multilingual (local export)",
+        repo: "",
+        quant,
+        graph: "laya.onnx",
+        data: None,
+        config: "laya_config.json",
+        tokenizer_dir: "tokenizer",
+    };
+    let checkpoint = bundle::checkpoint_from_dir(&spec, &dir)?;
     let mut decider = Decider::load(&checkpoint)?;
     eprintln!(
         "loaded {:?} checkpoint from {} (peak RSS {} MiB)",

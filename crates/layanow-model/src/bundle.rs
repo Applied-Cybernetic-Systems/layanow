@@ -6,9 +6,12 @@
 //! Downloading is opt-in via [`ALLOW_DOWNLOAD_ENV`] so nothing touches the
 //! network by accident.
 //!
-//! The bundle layout matches the published `receptron/laya-onnx` repo:
-//! `laya.onnx` + `laya.onnx.data` (graph and external weights),
-//! `laya_config.json`, and `tokenizer/`.
+//! Which files make up a bundle, and what they are called, differs between
+//! exports: the official `receptron/laya-onnx` uses `laya.onnx` +
+//! `laya.onnx.data` + `laya_config.json`, while the community multilingual
+//! export uses a single `model-fp32.onnx` + `rl_agent_config.json`. A
+//! [`CheckpointSpec`] records that layout so the same download/verify/load path
+//! serves every checkpoint.
 
 use std::collections::HashMap;
 use std::io::Read;
@@ -25,24 +28,83 @@ use crate::{Checkpoint, Quant, error::ModelError};
 pub const ALLOW_DOWNLOAD_ENV: &str = "LAYANOW_ALLOW_MODEL_DOWNLOAD";
 /// Optional environment variable overriding the cache root.
 pub const CACHE_DIR_ENV: &str = "LAYANOW_MODEL_CACHE";
-/// Default Hugging Face repo: the published English **fp32** bundle
-/// (`receptron/laya-onnx`). The multilingual checkpoint and int8 graphs are
-/// exported locally or selected via settings (ADR-28).
-pub const DEFAULT_REPO: &str = "receptron/laya-onnx";
-
-/// Files that make up a bundle, relative to its directory.
-pub const BUNDLE_FILES: &[&str] = &[
-    "laya.onnx",
-    "laya.onnx.data",
-    "laya_config.json",
-    "tokenizer/tokenizer.json",
-    "tokenizer/tokenizer_config.json",
-];
 
 /// Apache-2.0 attribution for the model weights (ADR-17).
 pub const ATTRIBUTION: &str = "Laya model weights: \u{a9} Convai Innovations, Apache-2.0 \
 (https://huggingface.co/convaiinnovations/laya). ONNX export: Receptron \
 (https://github.com/receptron/laya, MIT).";
+
+/// A known checkpoint: where to fetch it and how its bundle is laid out.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct CheckpointSpec {
+    /// Stable id used in settings and as the settings-file value.
+    pub id: &'static str,
+    /// Human-readable name for the settings UI.
+    pub name: &'static str,
+    /// Hugging Face repo holding the ONNX bundle.
+    pub repo: &'static str,
+    /// Weight precision of the shipped graph.
+    pub quant: Quant,
+    /// Bundle-relative graph file name.
+    pub graph: &'static str,
+    /// Bundle-relative external-weights file, when the graph uses one.
+    pub data: Option<&'static str>,
+    /// Bundle-relative calibration config (`laya_config.json` or the source
+    /// `rl_agent_config.json` — both carry the same keys we read).
+    pub config: &'static str,
+    /// Bundle-relative tokenizer directory (holds `tokenizer.json` and
+    /// `tokenizer_config.json`).
+    pub tokenizer_dir: &'static str,
+}
+
+/// English (ModernBERT-large, 421M), the official fp32 ONNX export (ADR-36).
+pub const ENGLISH: CheckpointSpec = CheckpointSpec {
+    id: "english",
+    name: "English · ModernBERT-large",
+    repo: "receptron/laya-onnx",
+    quant: Quant::Fp32,
+    graph: "laya.onnx",
+    data: Some("laya.onnx.data"),
+    config: "laya_config.json",
+    tokenizer_dir: "tokenizer",
+};
+
+/// Multilingual (mmBERT-base, 322M), the community fp32 ONNX export (T-173).
+pub const MULTILINGUAL: CheckpointSpec = CheckpointSpec {
+    id: "multilingual",
+    name: "Multilingual · mmBERT-base",
+    repo: "soyelmismo/laya-multilingual-onnx",
+    quant: Quant::Fp32,
+    graph: "model-fp32.onnx",
+    data: None,
+    config: "rl_agent_config.json",
+    tokenizer_dir: "tokenizer",
+};
+
+/// Every checkpoint the settings UI may offer.
+pub const CHECKPOINTS: &[CheckpointSpec] = &[ENGLISH, MULTILINGUAL];
+
+/// The checkpoint loaded when settings do not choose one (ADR-36).
+pub const DEFAULT_ID: &str = "english";
+
+/// Look up a known checkpoint by id.
+#[must_use]
+pub fn checkpoint(id: &str) -> Option<&'static CheckpointSpec> {
+    CHECKPOINTS.iter().find(|spec| spec.id == id)
+}
+
+/// The bundle-relative files `spec` needs, in download order.
+#[must_use]
+pub fn files(spec: &CheckpointSpec) -> Vec<String> {
+    let mut files = vec![spec.graph.to_string()];
+    if let Some(data) = spec.data {
+        files.push(data.to_string());
+    }
+    files.push(spec.config.to_string());
+    files.push(format!("{}/tokenizer.json", spec.tokenizer_dir));
+    files.push(format!("{}/tokenizer_config.json", spec.tokenizer_dir));
+    files
+}
 
 /// The cache root for model bundles.
 ///
@@ -68,61 +130,55 @@ pub fn bundle_dir(repo: &str) -> PathBuf {
     cache_dir().join(repo.replace('/', "--"))
 }
 
-/// Ensure the default bundle is cached, downloading and verifying it only if
-/// permitted.
-pub fn ensure_bundle() -> Result<PathBuf, ModelError> {
-    ensure_bundle_from(DEFAULT_REPO)
-}
-
-/// Ensure the bundle for `repo` is cached, downloading and verifying it only if
+/// Ensure `spec`'s bundle is cached, downloading and verifying it only if
 /// permitted.
 ///
 /// Returns [`ModelError::BundleMissing`] when the files are absent and
 /// [`ALLOW_DOWNLOAD_ENV`] is unset.
-pub fn ensure_bundle_from(repo: &str) -> Result<PathBuf, ModelError> {
-    let dir = bundle_dir(repo);
-    if is_complete(&dir) {
+pub fn ensure_bundle(spec: &CheckpointSpec) -> Result<PathBuf, ModelError> {
+    let dir = bundle_dir(spec.repo);
+    let wanted = files(spec);
+    if wanted.iter().all(|file| is_present(&dir.join(file))) {
         return Ok(dir);
     }
     if non_empty_env(ALLOW_DOWNLOAD_ENV).is_none() {
         return Err(ModelError::BundleMissing { path: dir, env: ALLOW_DOWNLOAD_ENV });
     }
-    download_bundle(repo, &dir)?;
+    download_bundle(spec.repo, &wanted, &dir)?;
     Ok(dir)
 }
 
-/// Verify the cached default bundle's size and digests against the manifest.
-pub fn verify_bundle() -> Result<(), ModelError> {
-    verify_bundle_from(DEFAULT_REPO, &bundle_dir(DEFAULT_REPO))
+/// Verify the cached bundle for `spec` against the published manifest.
+pub fn verify_bundle(spec: &CheckpointSpec) -> Result<(), ModelError> {
+    verify_bundle_from(spec, &bundle_dir(spec.repo))
 }
 
-/// Verify the bundle in `dir` against the manifest published for `repo`.
+/// Verify the bundle in `dir` against the manifest published for `spec`.
 ///
 /// Hashes every file (SHA-256 for LFS blobs, git-object SHA-1 for small
 /// non-LFS files), so it reads the whole bundle.
-pub fn verify_bundle_from(repo: &str, dir: &Path) -> Result<(), ModelError> {
-    let manifest = fetch_manifest(repo)?;
-    for &file in BUNDLE_FILES {
-        let expected = expect_file(&manifest, file)?;
-        verify_file(&dir.join(file), expected, file)?;
+pub fn verify_bundle_from(spec: &CheckpointSpec, dir: &Path) -> Result<(), ModelError> {
+    let manifest = fetch_manifest(spec.repo)?;
+    for file in files(spec) {
+        let expected = expect_file(&manifest, &file)?;
+        verify_file(&dir.join(&file), expected, &file)?;
     }
     Ok(())
 }
 
 /// Build a [`Checkpoint`] descriptor from an unpacked bundle directory.
 ///
-/// The graph is always `laya.onnx` inside `dir`; `quant` only records the
-/// intended precision (the bundle directory decides which graph that file is —
-/// e.g. an int8 export renames `laya_int8.onnx` to `laya.onnx`). See `LAYA.md`.
-/// Does not load the graph or tokenizer.
-pub fn checkpoint_from_dir(name: &str, dir: &Path, quant: Quant) -> Result<Checkpoint, ModelError> {
-    let config = crate::config::load(&dir.join("laya_config.json"))?;
+/// `spec` names the graph and config files inside `dir`; `quant` is `spec.quant`
+/// (the bundle chooses which graph to place at `spec.graph`). Does not load the
+/// graph or tokenizer.
+pub fn checkpoint_from_dir(spec: &CheckpointSpec, dir: &Path) -> Result<Checkpoint, ModelError> {
+    let config = crate::config::load(&dir.join(spec.config))?;
     Ok(Checkpoint {
-        name: name.to_string(),
-        graph: dir.join("laya.onnx"),
-        tokenizer: dir.join("tokenizer").join("tokenizer.json"),
+        name: spec.name.to_string(),
+        graph: dir.join(spec.graph),
+        tokenizer: dir.join(spec.tokenizer_dir).join("tokenizer.json"),
         config,
-        quant,
+        quant: spec.quant,
     })
 }
 
@@ -180,10 +236,10 @@ fn expect_file<'a>(
     manifest.get(file).ok_or_else(|| ModelError::ManifestMissing(file.to_string()))
 }
 
-fn download_bundle(repo: &str, dir: &Path) -> Result<(), ModelError> {
+fn download_bundle(repo: &str, files: &[String], dir: &Path) -> Result<(), ModelError> {
     let manifest = fetch_manifest(repo)?;
     std::fs::create_dir_all(dir)?;
-    for &file in BUNDLE_FILES {
+    for file in files {
         let expected = expect_file(&manifest, file)?;
         let destination = dir.join(file);
         if is_present(&destination) {
@@ -195,9 +251,9 @@ fn download_bundle(repo: &str, dir: &Path) -> Result<(), ModelError> {
         if let Some(parent) = destination.parent() {
             std::fs::create_dir_all(parent)?;
         }
-        // The graph's external weights are ~1.7 GB: stream to a `.part` file and
-        // rename only after the digest verifies, so an interrupted or corrupt
-        // download is never accepted as complete.
+        // The graph and its external weights can be over a gigabyte: stream to a
+        // `.part` file and rename only after the digest verifies, so an
+        // interrupted or corrupt download is never accepted as complete.
         let temporary = dir.join(format!("{file}.part"));
         let url = format!("https://huggingface.co/{repo}/resolve/main/{file}");
         tracing::info!(file, bytes = expected.size, "downloading model file");
@@ -295,14 +351,46 @@ fn non_empty_env(name: &str) -> Option<String> {
     std::env::var(name).ok().filter(|value| !value.is_empty())
 }
 
-fn is_complete(dir: &Path) -> bool {
-    BUNDLE_FILES.iter().all(|file| is_present(&dir.join(file)))
-}
-
 fn is_present(path: &Path) -> bool {
     file_size(path).is_some_and(|size| size > 0)
 }
 
 fn file_size(path: &Path) -> Option<u64> {
     std::fs::metadata(path).ok().map(|meta| meta.len())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn known_ids_resolve_to_specs() {
+        assert_eq!(checkpoint("english"), Some(&ENGLISH));
+        assert_eq!(checkpoint("multilingual"), Some(&MULTILINGUAL));
+        assert_eq!(checkpoint("nope"), None);
+        assert!(checkpoint(DEFAULT_ID).is_some());
+    }
+
+    #[test]
+    fn file_lists_follow_each_layout() {
+        assert_eq!(
+            files(&ENGLISH),
+            [
+                "laya.onnx",
+                "laya.onnx.data",
+                "laya_config.json",
+                "tokenizer/tokenizer.json",
+                "tokenizer/tokenizer_config.json",
+            ]
+        );
+        assert_eq!(
+            files(&MULTILINGUAL),
+            [
+                "model-fp32.onnx",
+                "rl_agent_config.json",
+                "tokenizer/tokenizer.json",
+                "tokenizer/tokenizer_config.json",
+            ]
+        );
+    }
 }
