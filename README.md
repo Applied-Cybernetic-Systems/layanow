@@ -101,7 +101,8 @@ nix develop -c wl-paste -p     # prints the highlight, or nothing
 
 The standalone probe is
 `cargo run -p layanow-platform --example read_primary`. Run the applet with
-`LAYANOW_DEBUG=1` to log capture outcomes (lengths only, never the text).
+`LAYANOW_LOG=layanow=debug` (or the `LAYANOW_DEBUG=1` shorthand) to log capture
+outcomes (lengths only, never the text).
 
 ## Model smoke test (M0)
 

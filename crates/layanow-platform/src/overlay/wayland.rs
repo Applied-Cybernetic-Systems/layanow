@@ -441,7 +441,7 @@ impl OutputHandler for Host {
 
 impl LayerShellHandler for Host {
     fn closed(&mut self, _conn: &Connection, _qh: &QueueHandle<Self>, _layer: &LayerSurface) {
-        eprintln!("layanow: layer surface closed by compositor");
+        tracing::warn!("layer surface closed by compositor");
         self.exit = true;
     }
 
@@ -467,7 +467,7 @@ impl LayerShellHandler for Host {
             }
         }
         if let Err(error) = self.ensure_gl() {
-            eprintln!("layanow: {error}");
+            tracing::error!(%error, "could not initialise GL");
             self.exit = true;
         }
         self.dirty.store(true, Ordering::Relaxed);
@@ -491,13 +491,13 @@ impl SeatHandler for Host {
         if capability == Capability::Keyboard && self.keyboard.is_none() {
             match self.seat_state.get_keyboard(qh, &seat, None) {
                 Ok(keyboard) => self.keyboard = Some(keyboard),
-                Err(error) => eprintln!("layanow: keyboard unavailable: {error}"),
+                Err(error) => tracing::warn!(%error, "keyboard unavailable"),
             }
         }
         if capability == Capability::Pointer && self.pointer.is_none() {
             match self.seat_state.get_pointer(qh, &seat) {
                 Ok(pointer) => self.pointer = Some(pointer),
-                Err(error) => eprintln!("layanow: pointer unavailable: {error}"),
+                Err(error) => tracing::warn!(%error, "pointer unavailable"),
             }
         }
     }

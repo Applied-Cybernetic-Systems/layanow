@@ -18,6 +18,8 @@ crossbeam-channel = "0.5"
 # Decode the embedded PNG tray icon (the Linux `ksni` backend has no
 # `Icon::from_path`).
 png = "0.18"
+# Structured diagnostics (E4).
+tracing = "0.1"
 
 # Overlay windowing (ADR-20/31). On Linux this is a wlr-layer-shell surface:
 # `winit` (and therefore eframe) cannot create layer surfaces, so the host talks

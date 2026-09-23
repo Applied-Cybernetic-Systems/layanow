@@ -104,7 +104,7 @@ impl Overlay {
     /// the same text twice.
     fn capture_item(&mut self) {
         let typed = self.entry.trim();
-        Self::debug(&format!("capture_item entry_len={}", typed.len()));
+        tracing::debug!(entry_len = typed.len(), "capture item");
         if !typed.is_empty() {
             // Typed text was not read from the screen; record that provenance
             // so it can be told apart from a native highlight.
@@ -116,28 +116,19 @@ impl Overlay {
         }
         match self.resolver.resolve_current_selection() {
             Ok(Some(selection)) => {
-                Self::debug(&format!("captured highlight_len={}", selection.text.len()));
+                tracing::debug!(highlight_len = selection.text.len(), "captured highlight");
                 self.push(selection);
             }
             Ok(None) => {
-                Self::debug("no highlight found");
+                tracing::debug!("no highlight found");
                 self.status = Some(
                     "no highlight found — the app may not publish it (type instead)".to_string(),
                 );
             }
             Err(error) => {
-                Self::debug(&format!("resolver error: {error}"));
+                tracing::warn!(%error, "selection resolver failed");
                 self.status = Some(format!("selection error: {error}"));
             }
-        }
-    }
-
-    /// Print a capture diagnostic when `LAYANOW_DEBUG` is set.
-    ///
-    /// Only lengths are logged, never the selected text.
-    fn debug(message: &str) {
-        if std::env::var_os("LAYANOW_DEBUG").is_some() {
-            eprintln!("layanow: {message}");
         }
     }
 

@@ -21,6 +21,10 @@ egui = { version = "0.32", default-features = false, features = ["default_fonts"
 # Cloneable command channel: `control` hands the overlay a `Receiver` and the
 # tray a cloned `Sender`.
 crossbeam-channel = "0.5"
+# Structured diagnostics (E4): the binary installs the subscriber; libraries
+# only emit events.
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 
 [lints]
 workspace = true

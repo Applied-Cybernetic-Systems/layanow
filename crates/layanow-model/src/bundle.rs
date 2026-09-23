@@ -200,7 +200,7 @@ fn download_bundle(repo: &str, dir: &Path) -> Result<(), ModelError> {
         // download is never accepted as complete.
         let temporary = dir.join(format!("{file}.part"));
         let url = format!("https://huggingface.co/{repo}/resolve/main/{file}");
-        eprintln!("layanow: downloading {file} ({} bytes)", expected.size);
+        tracing::info!(file, bytes = expected.size, "downloading model file");
         if let Err(error) = download_file(&url, &temporary, expected, file) {
             // Best-effort cleanup of the partial file; report the download error.
             drop(std::fs::remove_file(&temporary));

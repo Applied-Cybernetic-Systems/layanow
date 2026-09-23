@@ -22,6 +22,8 @@ ort = { version = "=2.0.0-rc.13", default-features = false, features = [
 tokenizers = { version = "0.23.2", default-features = false, features = ["fancy-regex"] }
 serde_json = "1"
 thiserror = "2"
+# Structured diagnostics (E4).
+tracing = "0.1"
 # First-run model download into the XDG cache (ADR-17). TLS via rustls.
 ureq = "2.12"
 # Integrity of downloaded files: SHA-256 for LFS blobs, git-object SHA-1 for

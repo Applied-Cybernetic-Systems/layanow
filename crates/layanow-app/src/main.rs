@@ -14,10 +14,28 @@ use layanow_model::{Decider, Quant, bundle};
 use layanow_platform::control::{self, Command, ControlError};
 
 fn main() {
+    init_tracing();
     if let Err(error) = run() {
-        eprintln!("layanow: {error}");
+        tracing::error!(%error, "fatal");
         std::process::exit(1);
     }
+}
+
+/// Install the `tracing` subscriber (E4).
+///
+/// Verbosity is controlled by `LAYANOW_LOG`, falling back to `RUST_LOG`, using
+/// an `EnvFilter` directive (e.g. `LAYANOW_LOG=layanow=debug`); the default is
+/// `warn`. `LAYANOW_DEBUG` is kept as a shorthand for `layanow=debug`. Captured
+/// text is never logged — only lengths and metadata.
+fn init_tracing() {
+    use tracing_subscriber::EnvFilter;
+
+    let filter = match std::env::var("LAYANOW_LOG").or_else(|_| std::env::var("RUST_LOG")) {
+        Ok(value) => EnvFilter::new(value),
+        Err(_) if std::env::var_os("LAYANOW_DEBUG").is_some() => EnvFilter::new("layanow=debug"),
+        Err(_) => EnvFilter::new("warn"),
+    };
+    drop(tracing_subscriber::fmt().with_env_filter(filter).with_target(false).try_init());
 }
 
 /// What the command line asked for.
@@ -84,7 +102,7 @@ fn run_applet() -> Result<(), Box<dyn std::error::Error>> {
     let control = match control::start() {
         Ok(control) => control,
         Err(ControlError::AlreadyRunning) => {
-            eprintln!("layanow: already running");
+            tracing::info!("already running");
             return Ok(());
         }
         Err(error) => return Err(error.into()),
@@ -94,7 +112,7 @@ fn run_applet() -> Result<(), Box<dyn std::error::Error>> {
     let _tray = match layanow_platform::tray::start(control.sender.clone()) {
         Ok(tray) => Some(tray),
         Err(error) => {
-            eprintln!("layanow: tray unavailable: {error}");
+            tracing::warn!(%error, "tray unavailable");
             None
         }
     };
@@ -114,7 +132,7 @@ fn run_applet() -> Result<(), Box<dyn std::error::Error>> {
 /// is set (ADR-17); otherwise a cached bundle is required.
 fn load_worker() -> Result<Worker, Box<dyn std::error::Error>> {
     let dir = bundle::ensure_bundle()?;
-    eprintln!("layanow: using bundle at {}", dir.display());
+    tracing::info!(path = %dir.display(), "using bundle");
     let checkpoint = bundle::checkpoint_from_dir(bundle::DEFAULT_REPO, &dir, Quant::Fp32)?;
     Ok(Worker::spawn(Decider::load(&checkpoint)?))
 }
