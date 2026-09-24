@@ -44,6 +44,8 @@
         libGL
         mesa
         onnxruntime
+        # `rfd` dlopens libdbus-1 for the xdg-desktop-portal FileChooser (ADR-40).
+        dbus
         libX11
         libXcursor
         libXi

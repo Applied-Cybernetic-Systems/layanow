@@ -20,7 +20,7 @@
 //! [`TextResolver`](layanow_resolvers::TextResolver) supplied by the platform
 //! (`layanow_platform::selection`).
 
-use crossbeam_channel::Receiver;
+use crossbeam_channel::{Receiver, Sender};
 
 use layanow_core::{Selection, Session, Source};
 use layanow_platform::control::Command;
@@ -82,6 +82,12 @@ pub struct Overlay {
     saving_name: Option<String>,
     /// The template currently chosen in the dropdown.
     selected_template: Option<String>,
+    /// Native file-picker results, delivered from a worker thread (ADR-40).
+    picker: Receiver<Option<Vec<std::path::PathBuf>>>,
+    /// Sender clone handed to the picker thread.
+    picker_tx: Sender<Option<Vec<std::path::PathBuf>>>,
+    /// Whether a picker dialog is currently open.
+    picker_open: bool,
     /// The id assigned to the next decision.
     next_request: u64,
     /// The id of the decision currently in flight, if any. A reply whose id
@@ -105,6 +111,7 @@ impl Overlay {
         resolver: Box<dyn TextResolver>,
         commands: Receiver<Command>,
     ) -> Self {
+        let (picker_tx, picker) = crossbeam_channel::unbounded();
         Self {
             session: Session::new(),
             resolver,
@@ -119,6 +126,9 @@ impl Overlay {
             contexts: Vec::new(),
             saving_name: None,
             selected_template: None,
+            picker,
+            picker_tx,
+            picker_open: false,
             next_request: 0,
             pending_request: None,
             panel_rect: None,
@@ -210,30 +220,46 @@ impl Overlay {
         if paths.is_empty() {
             return false;
         }
-        let mut contents = String::new();
-        let mut read = 0_usize;
-        for path in &paths {
-            match std::fs::read_to_string(path) {
-                Ok(file) => {
-                    if !contents.is_empty() {
-                        contents.push_str("\n\n");
-                    }
-                    contents.push_str(&file);
-                    read += 1;
-                }
-                Err(error) => {
-                    tracing::warn!(path = %path.display(), %error, "could not read context file");
-                }
-            }
-        }
+        self.load_files(&paths);
+        true
+    }
+
+    /// Read `paths` into the context, reporting the outcome in the status line.
+    fn load_files(&mut self, paths: &[std::path::PathBuf]) {
+        let (contents, read) = read_files(paths);
         if read == 0 {
             self.status = Some("could not read the selected file(s)".to_string());
-            return true;
+            return;
         }
         self.context = truncate_chars(&contents, MAX_CONTEXT_CHARS);
         self.selected_template = None;
         self.status = Some(format!("context loaded from {read} file(s)"));
-        true
+    }
+
+    /// Open the native file picker on a worker thread, since the portal call
+    /// blocks (ADR-40). The result is polled by [`Self::poll_picker`].
+    fn open_file_picker(&mut self) {
+        if self.picker_open {
+            return;
+        }
+        self.picker_open = true;
+        let sender = self.picker_tx.clone();
+        std::thread::spawn(move || {
+            let picked = rfd::FileDialog::new().set_title("Select context files").pick_files();
+            drop(sender.send(picked));
+        });
+    }
+
+    /// Take the file picker's result, if any (ADR-40).
+    fn poll_picker(&mut self) {
+        while let Ok(picked) = self.picker.try_recv() {
+            self.picker_open = false;
+            if let Some(paths) = picked {
+                if !paths.is_empty() {
+                    self.load_files(&paths);
+                }
+            }
+        }
     }
 
     /// Save the current context as a named template (ADR-40), replacing an
@@ -372,9 +398,10 @@ impl Overlay {
     }
 
     fn draw_capturing(&mut self, ui: &mut egui::Ui) {
-        // Context (state) box with a template dropdown and Save (ADR-40).
+        // Context (state) box with a template dropdown, Save and Files (ADR-40).
         let mut selected = self.selected_template.clone();
         let mut save_clicked = false;
+        let mut pick_files = false;
         ui.horizontal(|ui| {
             theme::shadowed_text(ui, "Context:", theme::FG4, theme::BODY_SIZE);
             ui.add(
@@ -394,6 +421,7 @@ impl Overlay {
                     }
                 });
             save_clicked = ui.button("Save…").clicked();
+            pick_files = ui.button("Files…").clicked();
         });
         if selected != self.selected_template {
             self.selected_template = selected;
@@ -406,6 +434,9 @@ impl Overlay {
         }
         if save_clicked {
             self.saving_name = Some(String::new());
+        }
+        if pick_files {
+            self.open_file_picker();
         }
         let mut confirm = false;
         let mut cancel = false;
@@ -546,6 +577,7 @@ impl OverlayApp for Overlay {
 
     fn update(&mut self, ctx: &egui::Context) {
         self.poll_worker();
+        self.poll_picker();
 
         if matches!(self.phase, Phase::Capturing) {
             if ctx.input_mut(|input| input.consume_key(egui::Modifiers::NONE, egui::Key::Tab)) {
@@ -588,6 +620,27 @@ impl OverlayApp for Overlay {
     fn should_exit(&self) -> bool {
         self.exit
     }
+}
+
+/// Read `paths` into one text block, returning it and the number read.
+fn read_files(paths: &[std::path::PathBuf]) -> (String, usize) {
+    let mut contents = String::new();
+    let mut read = 0_usize;
+    for path in paths {
+        match std::fs::read_to_string(path) {
+            Ok(file) => {
+                if !contents.is_empty() {
+                    contents.push_str("\n\n");
+                }
+                contents.push_str(&file);
+                read += 1;
+            }
+            Err(error) => {
+                tracing::warn!(path = %path.display(), %error, "could not read context file");
+            }
+        }
+    }
+    (contents, read)
 }
 
 /// The file paths named by `text`: `file://` URIs, or existing absolute paths.
@@ -1014,6 +1067,21 @@ mod tests {
     fn truncation_keeps_character_boundaries() {
         assert_eq!(truncate_chars("héllo", 3), "hél");
         assert_eq!(truncate_chars("hi", 10), "hi");
+    }
+
+    #[test]
+    fn read_files_concatenates_and_skips_missing() {
+        let dir = std::env::temp_dir().join(format!("layanow-read-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let a = dir.join("a.txt");
+        let b = dir.join("b.txt");
+        std::fs::write(&a, "first").unwrap();
+        std::fs::write(&b, "second").unwrap();
+        let (text, count) = read_files(&[a.clone(), b.clone(), dir.join("missing.txt")]);
+        assert_eq!(count, 2);
+        assert_eq!(text, "first\n\nsecond");
+        std::fs::remove_file(&a).ok();
+        std::fs::remove_file(&b).ok();
     }
 
     #[test]

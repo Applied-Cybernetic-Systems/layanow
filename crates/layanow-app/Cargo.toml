@@ -37,6 +37,11 @@ eframe = { version = "0.32", default-features = false, features = [
     "wayland",
     "x11",
 ] }
+# Native file picker for the overlay's Context box (ADR-40). On Linux this
+# talks to the xdg-desktop-portal FileChooser over D-Bus (via its own libdbus
+# FFI, no GTK linked); Windows/macOS use the native dialog. The call blocks, so
+# it runs on a worker thread.
+rfd = "0.17"
 
 [lints]
 workspace = true

@@ -507,6 +507,9 @@ evidence and must be rerun before registering a new precision variant.
 - a `file://` URI from a file manager (or an existing absolute path) in the
   selection is read into it — a file selection is never treated as a question or
   answer;
+- a **Files…** button opens the native picker (the xdg-desktop-portal
+  FileChooser on Linux, via `rfd`; the blocking portal call runs on a worker
+  thread so the overlay never freezes);
 - a dropdown selects a saved, named **context template**, and **Save…** stores
   the current context under a name;
 - templates persist in `~/.config/layanow/config.toml` as
