@@ -96,8 +96,8 @@ highlight, never the clipboard (ADR-5/13). Highlight text with the **mouse** in
 the target app and press **`Tab`** in the overlay to add it (first = question,
 rest = answers). You can also type an item and press `Tab`.
 
-Not every app publishes a highlight buffer (Zed does not; browsers and most
-toolkits do). To check an app before running the applet, highlight text and run:
+Browsers and most toolkits publish a highlight buffer; some apps do not. To
+check an app before running the applet, highlight text and run:
 
 ```sh
 nix develop -c wl-paste -p     # prints the highlight, or nothing
