@@ -534,4 +534,7 @@ invariant (AGENTS.md #4).
 it. `Esc`/hiding clears the context (templates persist). Large files are
 capped and the renderer truncates `state` to the token budget, so this suits a
 passage/ticket, not a whole document — chunked retrieval (T-181) remains the
-long-term answer for large corpora.
+long-term answer for large corpora. The native picker is verified on Linux
+(xdg-desktop-portal); on Windows/macOS it will need a parent window handle, and
+on macOS the panel must run on the main run loop, once those overlay hosts land
+(M7/M8, T-182).

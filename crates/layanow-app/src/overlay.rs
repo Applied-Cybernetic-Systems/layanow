@@ -254,9 +254,14 @@ impl Overlay {
     fn poll_picker(&mut self) {
         while let Ok(picked) = self.picker.try_recv() {
             self.picker_open = false;
-            if let Some(paths) = picked {
-                if !paths.is_empty() {
-                    self.load_files(&paths);
+            match picked {
+                Some(paths) if !paths.is_empty() => self.load_files(&paths),
+                // A cancel and a missing portal are indistinguishable through the
+                // sync API; report it rather than failing silently.
+                _ => {
+                    tracing::debug!("file picker returned no selection (cancelled or unavailable)");
+                    self.status =
+                        Some("no file selected (or the picker is unavailable)".to_string());
                 }
             }
         }
@@ -569,6 +574,9 @@ impl OverlayApp for Overlay {
                 Command::Reload => self.apply_settings(),
             }
         }
+        // Drain the picker on every tick (even hidden) so `picker_open` cannot
+        // get stuck if the overlay is hidden while a dialog is open (ADR-40).
+        self.poll_picker();
     }
 
     fn visible(&self) -> bool {
@@ -577,7 +585,6 @@ impl OverlayApp for Overlay {
 
     fn update(&mut self, ctx: &egui::Context) {
         self.poll_worker();
-        self.poll_picker();
 
         if matches!(self.phase, Phase::Capturing) {
             if ctx.input_mut(|input| input.consume_key(egui::Modifiers::NONE, egui::Key::Tab)) {
@@ -1048,6 +1055,16 @@ mod tests {
         overlay.decide();
         wait_for_reply(&mut overlay);
         assert!(matches!(overlay.phase, Phase::Error(ref error) if error == "no model"));
+    }
+
+    #[test]
+    fn cancelling_the_picker_clears_the_open_flag_and_reports() {
+        let (mut overlay, _resolver) = overlay();
+        overlay.picker_open = true;
+        overlay.picker_tx.send(None).expect("send");
+        overlay.poll_picker();
+        assert!(!overlay.picker_open);
+        assert!(overlay.status.is_some());
     }
 
     #[test]

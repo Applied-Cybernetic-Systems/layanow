@@ -36,6 +36,7 @@ agents must update it whenever work is started, finished, or newly discovered.
 - **T-178** · 2026-09-23 · model — Accuracy of the checkpoints themselves: English fp32 picks Berlin over Paris for "capital of France" (0.33), and multilingual fp32 misses some simple French/Italian capitals. Evaluate and document model limits; `layanow-model --example ask` reproduces a single question (and `LAYANOW_STATE` sets the context) and `--example precision_parity` compares precisions. (ADR-12)
 - **T-180** · 2026-09-23 · model — Track a possible `mmBERT-small` multilingual Laya checkpoint. Only `mmBERT-base` is published (base is bigger: 768 hidden vs 384); the encoder is co-trained with the head, so a small option needs a retrained/exported checkpoint. (ADR-39)
 - **T-181** · 2026-09-23 · resolve — Chunked local retrieval (e.g. Tantivy) over a corpus for contexts larger than the `state` token budget; the Context box only fits a passage/ticket (ADR-40).
+- **T-182** · 2026-09-23 · platform — File picker cross-platform: pass a parent window handle on Windows/macOS for modality, and run the native panel on the macOS main run loop, when those overlay hosts land (M7/M8). Linux (xdg-desktop-portal) is verified. (ADR-40)
 
 ### Capture & resolvers
 - **T-130** · 2026-09-22 · resolve — Move the PRIMARY read off the UI thread (blocking `get_contents` currently runs inside `update`; a stalled owner freezes the overlay). (ADR-33)
