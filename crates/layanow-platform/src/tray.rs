@@ -93,7 +93,7 @@ fn command_for_id(id: &str) -> Option<Command> {
     }
 }
 
-/// Open the standalone settings window in a new process (T-171).
+/// Open the standalone settings window in a new process.
 ///
 /// The settings window owns an eframe event loop, so it cannot share this
 /// applet's layer-shell loop; its named control channel keeps it to a single

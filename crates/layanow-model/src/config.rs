@@ -2,7 +2,7 @@
 //!
 //! Both the official `laya_config.json` and the source `rl_agent_config.json`
 //! carry the `max_len`, `head_max_len`, `temperature` and
-//! `temperature_by_options` keys read here (T-173); extra keys are ignored.
+//! `temperature_by_options` keys read here; extra keys are ignored.
 
 use std::path::Path;
 

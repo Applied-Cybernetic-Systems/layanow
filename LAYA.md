@@ -126,9 +126,9 @@ context-bearing inputs but 50% on state-less inputs (70% overall)** — below th
 (ORT session, debug process): fp32 ≈ 2.1 GB, int8 ≈ 0.7 GB. **Therefore the
 multilingual checkpoint defaults to fp32** (ADR-28), with int8 an opt-in
 setting. The shipped English bundle (`receptron/laya-onnx`) is also fp32 and is
-the default; ADR-36 makes int8 opt-in there too (T-114).
+the default; ADR-36 makes int8 opt-in there too.
 
-**T-121 result (shipped graphs, ADR-39).** Re-evaluated the actual community
+**Result (shipped graphs, ADR-39).** Re-evaluated the actual community
 exports against fp32 on a 20-case self-made MCQ set
 (`layanow-model --example precision_parity`): fp16 is effectively exact for both
 checkpoints (20/20; max `|p-q| ≤ 1.3e-3`). Weight-only int8

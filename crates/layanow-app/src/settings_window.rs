@@ -1,4 +1,4 @@
-//! The standalone settings window (T-113/T-115/T-117).
+//! The standalone settings window.
 //!
 //! This runs as its own process (`layanow settings`) with a normal
 //! `xdg_toplevel` and an eframe/glow event loop, so it is independent of the

@@ -15,11 +15,10 @@
 //! [`OverlayApp::visible`](crate::overlay::OverlayApp::visible) becomes true it
 //! takes exclusive keyboard interactivity (ADR-26); hiding it again blanks the
 //! surface to transparent while keeping it mapped (unmapping would leave the
-//! layer surface unconfigured and break the next show, T-174). When
+//! layer surface unconfigured and break the next show). When
 //! [`OverlayApp::interactive_rect`](crate::overlay::OverlayApp::interactive_rect)
 //! returns a rectangle, only that region receives the pointer (so a click can
-//! dismiss the results, ADR-15) and everything else stays click-through
-//! (T-166).
+//! dismiss the results, ADR-15) and everything else stays click-through.
 
 use egui::Context;
 
@@ -48,7 +47,7 @@ pub trait OverlayApp {
     ///
     /// The host sets the layer surface's input region to exactly this
     /// rectangle, so clicks and scrolls outside it pass through to the
-    /// application underneath (ADR-14, T-166). The default is `None`, which
+    /// application underneath (ADR-14). The default is `None`, which
     /// leaves the whole surface click-through.
     fn interactive_rect(&self) -> Option<egui::Rect> {
         None

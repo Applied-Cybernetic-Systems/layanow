@@ -16,8 +16,8 @@ pub mod overlay;
 /// Gruvbox (medium contrast) theme and shadowed text.
 pub mod theme;
 
-/// Persisted user settings (`~/.config/layanow/config.toml`, T-118).
+/// Persisted user settings (`~/.config/layanow/config.toml`).
 pub mod settings;
 
-/// The standalone settings window (T-113/T-115/T-117).
+/// The standalone settings window.
 pub mod settings_window;

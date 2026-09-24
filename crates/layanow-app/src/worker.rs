@@ -5,7 +5,7 @@
 //! decision engine built by an engine factory and answers one request at a
 //! time.
 //!
-//! The factory indirection is what makes the settings real (T-113/T-117): the
+//! The factory indirection is what makes the settings real: the
 //! engine can be (re)built for another checkpoint, and the on-demand policy
 //! drops it after each decision. Loading therefore happens on this thread, not
 //! on the applet's event loop, so a several-second `Decider::load` never freezes
@@ -31,7 +31,7 @@ pub enum Request {
         answers: Vec<String>,
     },
     /// Apply changed settings: rebuild for `checkpoint`/`quant` and set the
-    /// unload policy (T-113/T-114/T-117).
+    /// unload policy.
     Configure {
         /// The checkpoint id to load.
         checkpoint: String,
@@ -121,7 +121,7 @@ impl Worker {
     ///
     /// Unless `on_demand`, the engine is loaded eagerly on the worker thread;
     /// with `on_demand` it is loaded on the first decision and dropped
-    /// afterwards (T-117). Loading never blocks the caller.
+    /// afterwards. Loading never blocks the caller.
     pub fn spawn(
         factory: EngineFactory,
         checkpoint: impl Into<String>,

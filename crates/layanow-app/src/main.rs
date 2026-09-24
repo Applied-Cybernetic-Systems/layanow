@@ -103,7 +103,7 @@ fn print_help() {
 
 /// Run the resident applet until it quits.
 fn run_applet() -> Result<(), Box<dyn std::error::Error>> {
-    // Bind the control socket first: it is the single-instance lock (T-153) and
+    // Bind the control socket first: it is the single-instance lock and
     // makes `layanow toggle` responsive while the model loads.
     let control = match control::start() {
         Ok(control) => control,
@@ -139,8 +139,7 @@ fn run_applet() -> Result<(), Box<dyn std::error::Error>> {
 ///
 /// The engine is built lazily on the worker thread (via the factory), so the
 /// applet starts immediately even before a multi-gigabyte model is ready and a
-/// later settings change can swap the checkpoint without freezing the overlay
-/// (T-113/T-117).
+/// later settings change can swap the checkpoint without freezing the overlay.
 fn build_worker(settings: &Settings) -> Worker {
     let factory: EngineFactory = Box::new(|checkpoint_id, quant| {
         let spec = bundle::checkpoint(checkpoint_id)

@@ -1,4 +1,4 @@
-//! Precision parity check (T-121, ADR-24/39).
+//! Precision parity check (ADR-24/39).
 //!
 //! Compares a checkpoint's fp16 and int8 graphs against its fp32 reference on a
 //! small, self-made MCQ set (ADR-12): top-1 agreement and probability drift.

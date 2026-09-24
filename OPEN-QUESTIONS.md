@@ -24,13 +24,13 @@ Decisions live in `DECISIONS.md` as ADRs. This file tracks what is still open.
 | D1 | v1 platform | Linux; order Linux → Windows → macOS |
 | E1 | Git | `github.com/Applied-Cybernetic-Systems/layanow` (public) (ADR-22) |
 | E3 | Testing fixtures | **Commit generated golden fixtures** for the rendering/calibration port; replay offline (ADR-29) |
-| E4 | Logging | **`tracing` + `tracing-subscriber`**; `LAYANOW_LOG` (fallback `RUST_LOG`), default `warn`, `LAYANOW_DEBUG` shorthand (T-143) |
-| E5 | Config | **TOML at `~/.config/layanow/config.toml`**: `checkpoint`, `confidence_threshold`, `unload` (hot/on-demand) in v1 (T-118, ADR-38) |
+| E4 | Logging | **`tracing` + `tracing-subscriber`**; `LAYANOW_LOG` (fallback `RUST_LOG`), default `warn`, `LAYANOW_DEBUG` shorthand |
+| E5 | Config | **TOML at `~/.config/layanow/config.toml`**: `checkpoint`, `confidence_threshold`, `unload` (hot/on-demand) in v1 (ADR-38) |
 | E8 | MSRV/edition | **Rust 1.85 / edition 2024** (pinned in `Cargo.toml`/`rust-toolchain.toml`) |
 
 ## Deferred (decide later)
 
-- [x] **D2. Distribution** — Nix flake package for Linux (done, T-155); packaging for Windows/macOS remains.
+- [x] **D2. Distribution** — Nix flake package for Linux (done); packaging for Windows/macOS remains.
 - [ ] **D3. Autostart** — start at login (systemd user unit / xdg autostart)?
 - [ ] **D4. Single instance** — enforce one applet instance?
 - [ ] **D5. Updates** — update mechanism, or manual? Model version pinning.

@@ -13,7 +13,7 @@ use serde::{Deserialize, Serialize};
 /// The app never refuses to answer; it only warns.
 pub const DEFAULT_CONFIDENCE_THRESHOLD: f32 = 0.5;
 
-/// The three anchor colours of the probability ramp (T-116).
+/// The three anchor colours of the probability ramp.
 ///
 /// A bar's colour lerps `low -> mid -> high` as its probability goes
 /// `0 -> 0.5 -> 1`. The default is the gruvbox red/orange/green accents

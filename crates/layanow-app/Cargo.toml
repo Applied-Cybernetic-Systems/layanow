@@ -25,10 +25,10 @@ crossbeam-channel = "0.5"
 # only emit events.
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
-# Persist user settings to `~/.config/layanow/config.toml` (T-118).
+# Persist user settings to `~/.config/layanow/config.toml`.
 serde = { version = "1", features = ["derive"] }
 toml = "0.9"
-# Standalone settings window (T-113+): a normal xdg_toplevel rendered portably
+# Standalone settings window: a normal xdg_toplevel rendered portably
 # with eframe/glow. ADR-31 dropped eframe for the overlay only, whose
 # layer-shell requirements eframe cannot meet.
 eframe = { version = "0.32", default-features = false, features = [

@@ -190,7 +190,7 @@ struct Host {
     dirty: Arc<AtomicBool>,
     /// The input region applied last frame, in surface coordinates, and whether
     /// one has been applied yet. Only the UI panel is interactive; everything
-    /// else is click-through (T-166).
+    /// else is click-through.
     input_rect: Option<(i32, i32, i32, i32)>,
     input_region_set: bool,
     visible: bool,
@@ -294,7 +294,7 @@ impl Host {
     /// Used when hiding: the surface stays **mapped** but its last UI frame is
     /// cleared. Unmapping (detaching the buffer) makes the compositor treat the
     /// layer surface as unconfigured, so a later `set_keyboard_interactivity`
-    /// fails with "layer_surface has never been configured" (T-174).
+    /// fails with "layer_surface has never been configured".
     fn render_clear(&mut self) -> Result<(), OverlayError> {
         if let Some(gl) = &mut self.gl {
             gl.painter.clear([self.width, self.height], [0.0, 0.0, 0.0, 0.0]);
@@ -332,7 +332,7 @@ impl Host {
     /// Mirror [`OverlayApp::interactive_rect`] onto the surface's input region.
     ///
     /// Only the UI panel receives pointer input; every other region stays
-    /// click-through to the application underneath (ADR-14, T-166). A hidden
+    /// click-through to the application underneath (ADR-14). A hidden
     /// overlay is entirely click-through (ADR-34).
     fn apply_input_region(&mut self) -> Result<(), OverlayError> {
         let rect = if self.app.visible() {

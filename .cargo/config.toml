@@ -3,6 +3,6 @@ lint = "clippy --all-targets --all-features -- -D warnings"
 fmt-check = "fmt --all -- --check"
 
 # Keep `cargo doc` locally as strict as CI, so broken intra-doc links fail the
-# local quality gate too (T-151).
+# local quality gate too.
 [env]
 RUSTDOCFLAGS = "-D warnings"

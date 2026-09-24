@@ -5,7 +5,7 @@
 //! Windows. [`interprocess`] dispatches on the name type, so the same code
 //! serves every platform.
 //!
-//! The socket doubles as the single-instance lock (T-153): the first applet
+//! The socket doubles as the single-instance lock: the first applet
 //! binds it; a later applet notices a live owner and exits.
 //! [`start`](crate::control::start) rejects a live instance and reclaims a stale
 //! Unix socket file left by a crash.
@@ -14,8 +14,8 @@
 //! per connection. The name is user-scoped: on Unix it lives under
 //! `$XDG_RUNTIME_DIR` (a mode-0700 directory); if that is unset it falls back to
 //! a per-uid subdirectory created mode 0700 with the socket itself restricted
-//! to 0600, so the control channel is never exposed through a shared temp dir
-//! (T-169). [`cleanup`](crate::control::cleanup) unlinks it on a clean exit
+//! to 0600, so the control channel is never exposed through a shared temp dir.
+//! [`cleanup`](crate::control::cleanup) unlinks it on a clean exit
 //! (process exit skips the listener's own name reclamation).
 
 use std::io::{BufRead, BufReader, Write};
@@ -43,7 +43,7 @@ pub enum Command {
     Hide,
     /// Quit the applet.
     Quit,
-    /// Re-read the settings file and apply it (T-113/T-117: checkpoint,
+    /// Re-read the settings file and apply it (checkpoint,
     /// confidence threshold, unload policy).
     Reload,
 }
@@ -80,7 +80,7 @@ impl Command {
 /// Errors from the applet control channel.
 #[derive(Debug, thiserror::Error)]
 pub enum ControlError {
-    /// Another applet already owns the control socket (T-153).
+    /// Another applet already owns the control socket.
     #[error("another layanow instance is already running")]
     AlreadyRunning,
     /// No applet is listening on the control socket.
@@ -177,7 +177,7 @@ fn send_to(id: &str, command: Command) -> Result<(), ControlError> {
 /// stale Unix socket file left by a crash.
 fn bind(id: &str) -> Result<LocalSocketListener, ControlError> {
     let name = socket_name(id)?;
-    // A successful connect means a live instance owns the name (T-153). This
+    // A successful connect means a live instance owns the name. This
     // also tells a live owner apart from a stale socket file.
     if LocalSocketStream::connect(name.borrow()).is_ok() {
         return Err(ControlError::AlreadyRunning);
@@ -191,7 +191,7 @@ fn bind(id: &str) -> Result<LocalSocketListener, ControlError> {
     match ListenerOptions::new().name(name).create_sync() {
         Ok(listener) => {
             // Defence in depth: the containing directory is already user-private,
-            // but make the socket itself 0600 as well (T-169).
+            // but make the socket itself 0600 as well.
             #[cfg(unix)]
             restrict_socket(&socket_path(id)?)?;
             Ok(listener)
@@ -245,7 +245,7 @@ fn socket_name(id: &str) -> Result<Name<'static>, ControlError> {
 /// The Unix socket path for `id` (Unix only).
 ///
 /// Prefers `$XDG_RUNTIME_DIR`; when it is unset, falls back to a user-private
-/// directory under the temp dir (see [`private_runtime_dir`], T-169).
+/// directory under the temp dir (see [`private_runtime_dir`]).
 #[cfg(unix)]
 fn socket_path(id: &str) -> Result<std::path::PathBuf, ControlError> {
     Ok(private_runtime_dir()?.join(format!("{id}.sock")))
@@ -257,7 +257,7 @@ fn socket_path(id: &str) -> Result<std::path::PathBuf, ControlError> {
 /// trusted as-is. When it is unset we must not put the socket directly in a
 /// shared temp dir: instead it lives in a per-uid subdirectory created mode
 /// 0700, and [`bind`] restricts the socket itself to 0600, so another user
-/// cannot connect to the applet's control channel (T-169).
+/// cannot connect to the applet's control channel.
 #[cfg(unix)]
 fn private_runtime_dir() -> Result<std::path::PathBuf, ControlError> {
     if let Some(dir) = std::env::var_os("XDG_RUNTIME_DIR").filter(|value| !value.is_empty()) {
@@ -293,7 +293,7 @@ fn secure_private_dir(dir: &std::path::Path) -> Result<(), ControlError> {
     Ok(())
 }
 
-/// Restrict a Unix socket to the current user (T-169).
+/// Restrict a Unix socket to the current user.
 #[cfg(unix)]
 fn restrict_socket(path: &std::path::Path) -> Result<(), ControlError> {
     use std::os::unix::fs::PermissionsExt;

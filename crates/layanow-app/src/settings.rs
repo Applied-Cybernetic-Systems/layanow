@@ -1,4 +1,4 @@
-//! User settings persisted to `~/.config/layanow/config.toml` (T-118, E5).
+//! User settings persisted to `~/.config/layanow/config.toml` (E5).
 //!
 //! The file is optional: a missing or invalid file falls back to the default
 //! settings and logs a warning, so the applet always starts.
@@ -11,7 +11,7 @@ use serde::{Deserialize, Serialize};
 use crate::results::{DEFAULT_CONFIDENCE_THRESHOLD, Palette};
 
 /// Whether the model stays resident or is unloaded between decisions
-/// (ADR-11, T-117).
+/// (ADR-11).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum UnloadPolicy {
@@ -38,15 +38,15 @@ pub struct Settings {
     /// Id of the checkpoint to load (ADR-7). An unknown id falls back to the
     /// default checkpoint at load time.
     pub checkpoint: String,
-    /// Weight precision of the graph to load (T-114, ADR-39). A precision the
+    /// Weight precision of the graph to load (ADR-39). A precision the
     /// checkpoint does not offer falls back to fp32 at load time.
     pub quant: Quant,
     /// Confidence below which a decision is flagged as low-confidence
     /// (ADR-27 C2). The app never refuses to answer.
     pub confidence_threshold: f32,
-    /// Hot vs on-demand model residency (ADR-11, T-117).
+    /// Hot vs on-demand model residency (ADR-11).
     pub unload: UnloadPolicy,
-    /// Probability-bar colour anchors (T-116).
+    /// Probability-bar colour anchors.
     pub palette: Palette,
     /// Named context templates, selectable in the overlay (ADR-40).
     pub contexts: Vec<NamedContext>,

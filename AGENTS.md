@@ -51,8 +51,8 @@ Work is tracked in the **GitHub issue tracker**
 
 - **Labels** are `area/<core|model|resolve|overlay|app|platform|ui|docs|ci|build|pkg>`
   plus `deferred`; **milestones** are `M0`–`M10` (see `PLAN.md`).
-- The historical `T-###` ids are kept in issue titles (e.g. `T-130: …`) for
-  traceability; the issue number is the tracker id. Ids are never reused.
+- Issue titles carry the original task id for traceability; the issue number
+  is the tracker id. Ids are never reused.
 - When you start an issue, assign yourself / comment; when you finish it, close
   it with a short outcome and the commit, as `**Closed:**` used to.
 - Record anything you notice as a new issue instead of acting silently.

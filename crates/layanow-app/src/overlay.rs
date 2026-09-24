@@ -68,7 +68,7 @@ pub struct Overlay {
     commands: Receiver<Command>,
     phase: Phase,
     threshold: f32,
-    /// Probability-bar colour anchors from settings (T-116).
+    /// Probability-bar colour anchors from settings.
     palette: Palette,
     /// A short user-facing hint (e.g. "no selection") drawn while capturing.
     status: Option<String>,
@@ -92,10 +92,10 @@ pub struct Overlay {
     next_request: u64,
     /// The id of the decision currently in flight, if any. A reply whose id
     /// does not match is stale (the decision it belongs to was dismissed) and
-    /// is dropped (T-167).
+    /// is dropped.
     pending_request: Option<u64>,
     /// The panel's screen rectangle from the last frame, used to keep only the
-    /// panel interactive (ADR-14, T-166).
+    /// panel interactive (ADR-14).
     panel_rect: Option<egui::Rect>,
     /// Whether the overlay is shown; starts hidden (ADR-34).
     visible: bool,
@@ -137,12 +137,12 @@ impl Overlay {
         }
     }
 
-    /// Override the low-confidence threshold (from settings, T-115).
+    /// Override the low-confidence threshold (from settings).
     pub fn set_threshold(&mut self, threshold: f32) {
         self.threshold = threshold;
     }
 
-    /// Re-read the settings file and apply it live (T-113/T-115/T-117): the
+    /// Re-read the settings file and apply it live: the
     /// threshold changes immediately, and the worker is reconfigured for the
     /// checkpoint and unload policy.
     fn apply_settings(&mut self) {
@@ -309,7 +309,7 @@ impl Overlay {
         };
         let answers = self.session.answer_texts();
         // Each decision gets a fresh id so a reply for an abandoned decision
-        // cannot be mistaken for the current one (T-167).
+        // cannot be mistaken for the current one.
         let id = self.next_request;
         self.next_request = self.next_request.wrapping_add(1);
         self.phase = match self.worker.decide(id, self.context.clone(), question, answers) {
@@ -329,7 +329,7 @@ impl Overlay {
     /// A reply is accepted only if its id matches the decision currently in
     /// flight. Replies for a decision that was abandoned (e.g. the overlay was
     /// hidden mid-decision) no longer match and are dropped, so stale results
-    /// cannot reappear (T-167).
+    /// cannot reappear.
     fn poll_worker(&mut self) {
         while let Some(response) = self.worker.try_recv() {
             let id = match &response {
@@ -613,7 +613,7 @@ impl OverlayApp for Overlay {
                     .show(ui, |ui| self.draw(ui));
             });
         // The panel rectangle feeds the host's input region next frame, so only
-        // the panel is clickable and the rest stays click-through (T-166).
+        // the panel is clickable and the rest stays click-through.
         self.panel_rect = Some(area.response.rect);
     }
 

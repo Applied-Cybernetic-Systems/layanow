@@ -275,8 +275,8 @@ EGL/GLES context bound to that surface (`glutin`, with the raw `wl_display` /
 pointer is **click-through** via an empty `wl_surface` input region (ADR-14);
 while results are shown the input region is set to exactly the results-panel
 rectangle, so only the panel is clickable and everything else stays
-click-through (ADR-15, revised by T-166). The translucent backdrop is painted
-only behind the UI panel, not across the whole surface (T-166). The UI stays in `layanow-app` behind the `OverlayApp` trait.
+click-through (ADR-15). The translucent backdrop is painted
+only behind the UI panel, not across the whole surface. The UI stays in `layanow-app` behind the `OverlayApp` trait.
 `eframe` is dropped from the dependency tree.
 **Why:** `winit`/`eframe` only create `xdg_toplevel` windows, which cannot be
 always-on-top, click-through, *and* keyboard-interactive on Wayland; that
@@ -341,7 +341,7 @@ protocol. `layanow` with no arguments runs the applet;
 `layanow toggle|show|hide|quit` connect to it and send one newline-terminated
 command. The transport is `interprocess`'s `local_socket`: a Unix domain socket
 under `$XDG_RUNTIME_DIR` on Unix and a named pipe on Windows. The same socket is
-the single-instance lock (T-153): the first applet binds it, a later applet
+the single-instance lock: the first applet binds it, a later applet
 notices a live owner and exits, and a stale Unix socket file left by a crash is
 reclaimed. The command type and parsing live in `layanow-platform::control`;
 the listener runs on a dedicated thread and forwards commands over an `mpsc`
@@ -353,10 +353,10 @@ surface uses `KeyboardInteractivity::None` with an empty input region.
 while hidden) and `visible()`. On show the host takes
 `KeyboardInteractivity::Exclusive`; on hide it blanks the surface to transparent
 and returns to `None` while keeping the surface mapped (unmapping would leave it
-unconfigured and break the next show, T-174), so the keyboard is never grabbed
+unconfigured and break the next show), so the keyboard is never grabbed
 while the applet is hidden. `Esc`
 now **hides** the overlay (revising ADR-33's "quits when nothing is captured");
-quitting is `layanow quit` (the tray in T-111 will add a direct control).
+quitting is `layanow quit` (the tray will add a direct control).
 
 **Why:** D-Bus is Linux-only and would force a second Windows mechanism; TCP has
 a firewall/port surface. A user-scoped UDS/named pipe is the OS-native local
@@ -373,8 +373,8 @@ on a clean exit (`control::cleanup`) and `bind` reclaims a stale file otherwise.
 A decision that is in flight when the overlay is hidden has its late reply
 dropped so stale results cannot reappear; each decision now carries a
 monotonic id and the overlay accepts only the reply matching the in-flight id
-(T-167, superseding the earlier phase-only guard). The tray and settings
-(T-111/T-113+) attach to the same command stream.
+(superseding the earlier phase-only guard). The tray and settings
+attach to the same command stream.
 
 ## ADR-35 — Tray icon uses `tray-icon`'s `ksni` backend on Linux
 **Decision:** The system tray is `tray-icon` (ADR-20). On Linux it is built
@@ -396,25 +396,25 @@ tree has no `gtk`/`libappindicator`). waybar provides the StatusNotifierWatcher.
 would enable both mutually-exclusive Linux backends and pull in the unused GTK
 tree (`option-ext`/MPL-2.0, the unmaintained `proc-macro-error`).
 `PredefinedMenuItem::quit` renders disabled under the `ksni` bridge, so Quit is
-an ordinary menu item. The `Settings...` entry is deferred to T-113+, and the
-menu does not yet reflect overlay visibility (T-172).
+an ordinary menu item. The `Settings...` entry is deferred, and the
+menu does not yet reflect overlay visibility.
 
 ## ADR-36 — English default is fp32; int8 is an opt-in setting
 **Decision:** The default English checkpoint is the shipped **fp32** graph
 (`receptron/laya-onnx`, `Quant::Fp32`) — which is what `main.rs` already loads.
 Dynamic int8 is an **opt-in setting**, not a default; it lands with the settings
-menu (T-113/T-114) and is gated on T-121 confirming it meets ADR-24's accuracy
+menu and is gated on confirming it meets ADR-24's accuracy
 bar. This supersedes ADR-16's "English int8" default and amends the int8 default
 in ADR-11 and ADR-24 for English (multilingual was already fp32 per ADR-28).
-**Why:** fp32 is strictly the more accurate graph — quantization only adds error
-(T-120). int8 is the resource win, but fp32 already fits ADR-11's ≤ 3 GB soft
+**Why:** fp32 is strictly the more accurate graph — quantization only adds error.
+int8 is the resource win, but fp32 already fits ADR-11's ≤ 3 GB soft
 budget (≈ 2.1 GB vs ≈ 0.7 GB), so there is no budget pressure to accept an
 unverified accuracy loss. The multilingual export-spike result (int8 vs fp32 top-1
 agreement 70% overall) shows int8 can change decisions; the English case has not
-been measured (T-121).
+been measured.
 **Consequence:** `AGENTS.md`/`PLAN.md`/`OPEN-QUESTIONS.md`/`LAYA.md` no longer
-describe an English int8 default. `Quant` stays metadata-only until T-114 makes
-it select the graph file.
+describe an English int8 default. `Quant` stays metadata-only until it is wired
+to select the graph file.
 
 ## ADR-37 — Checkpoint registry; multilingual ONNX is a community export
 **Decision:** Checkpoints are described by a `CheckpointSpec` registry
@@ -426,7 +426,7 @@ it select the graph file.
 point `DEFAULT_REPO` at the canonical `convaiinnovations/laya` hub: that repo
 publishes the *source* checkpoints as safetensors, not ONNX, so `ort` cannot
 load it directly.
-**Why:** T-173. The hub is canonical but contains no ONNX artifacts for any
+**Why:** The hub is canonical but contains no ONNX artifacts for any
 checkpoint; switching would require us to export and host ~0.7–1.7 GB graphs
 ourselves. The community multilingual export matches our graph contract (same
 `input_ids`/`attention_mask`/`marker_pos`/`marker_mask`/`qtype` inputs and an
@@ -436,14 +436,15 @@ against the Hugging Face manifest, loads through `ort`, and ranks a 3-option
 is fp16 weights (≈3900 ms/decision on CPU software emulation) and
 `sevenreasons/laya-onnx-fp16` is an English fp16 export.
 **Consequence:** English fp32 stays the default (ADR-36); multilingual is a
-settings toggle (T-113). A replaced or corrupted community export is caught by
+settings toggle. A replaced or corrupted community export is caught by
 the manifest digest check (ADR-17). The layout is data, so a better export can
-replace it without code changes. int8 stays opt-in and gated on T-121.
+replace it without code changes. int8 stays opt-in and gated on an accuracy
+check.
 
 ## ADR-38 — Settings is a separate `layanow settings` process
 **Decision:** The settings UI (checkpoint, confidence threshold, unload policy;
-T-113/T-115/T-117) is a standalone process, opened by `layanow settings` or
-spawned by the tray's **Settings…** item (T-171). It is a normal `xdg_toplevel`
+) is a standalone process, opened by `layanow settings` or
+spawned by the tray's **Settings…** item. It is a normal `xdg_toplevel`
 rendered with `eframe`/`glow`, with its own event loop. It edits
 `~/.config/layanow/config.toml` and then sends `Command::Reload` to the resident
 applet, which re-reads the file and applies the change; the file is the single
@@ -459,7 +460,7 @@ protocol.
 window only (the overlay keeps the layer-shell host); no `wgpu`. Settings are
 applied live via `Command::Reload`: the confidence threshold changes
 immediately, and a checkpoint change rebuilds the model on the worker thread
-(never the overlay loop) through the factory added in T-113/T-117, with the
+(never the overlay loop) through the factory, with the
 on-demand policy dropping it after each decision. The worker's eager load moved
 off the startup path, so the applet now starts before the model is ready (a load
 failure surfaces on the first decision / in the log rather than at launch).
@@ -472,7 +473,7 @@ the default. fp16 is offered for **both** checkpoints; int8 is offered for
 **English only** and carries a lower-accuracy warning. This amends ADR-24 (the
 quantization method), ADR-36 (int8 is no longer "not yet offered") and ADR-37
 (mizchi fp16 is now used).
-**Why:** T-114/T-121. Each candidate graph was evaluated against its fp32
+**Why:** Each candidate graph was evaluated against its fp32
 reference on a 20-case self-made MCQ set (`layanow-model --example
 precision_parity`, `LAYANOW_ALLOW_MODEL_DOWNLOAD=1`):
 - English fp16 (`inferenceprince/laya-onnx`): 20/20 top-1 agreement, max
@@ -518,7 +519,7 @@ The context is sent as the `state` JSON `{"context": <text>}` (blank → `{}`),
 with the question still `ins` and the answers `crit` (ADR-23). Because the
 context box, dropdown and Save button need the pointer, the capturing panel is
 now pointer-interactive too (the panel already was in the results phase); the
-area outside the panel stays click-through (amends ADR-14/25 and T-166).
+area outside the panel stays click-through (amends ADR-14/25).
 **Why:** The app's intended use is deciding from *provided* evidence, and the
 model is far stronger with it — the same question went from 37% (wrong) to 92%
 (correct) with a passage in `state`, and a bare string `state` measured worse
@@ -533,8 +534,7 @@ invariant (AGENTS.md #4).
 `DecisionEngine::decide_choice` carry the context; `render::context_state` wraps
 it. `Esc`/hiding clears the context (templates persist). Large files are
 capped and the renderer truncates `state` to the token budget, so this suits a
-passage/ticket, not a whole document — chunked retrieval (T-181) remains the
+passage/ticket, not a whole document — chunked retrieval remains the
 long-term answer for large corpora. The native picker is verified on Linux
 (xdg-desktop-portal); on Windows/macOS it will need a parent window handle, and
-on macOS the panel must run on the main run loop, once those overlay hosts land
-(issue T-182).
+on macOS the panel must run on the main run loop, once those overlay hosts land.
