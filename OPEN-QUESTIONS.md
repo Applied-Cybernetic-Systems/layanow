@@ -27,6 +27,7 @@ Decisions live in `DECISIONS.md` as ADRs. This file tracks what is still open.
 | E4 | Logging | **`tracing` + `tracing-subscriber`**; `LAYANOW_LOG` (fallback `RUST_LOG`), default `warn`, `LAYANOW_DEBUG` shorthand |
 | E5 | Config | **TOML at `~/.config/layanow/config.toml`**: `checkpoint`, `confidence_threshold`, `unload` (hot/on-demand) in v1 (ADR-38) |
 | E8 | MSRV/edition | **Rust 1.85 / edition 2024** (pinned in `Cargo.toml`/`rust-toolchain.toml`) |
+| E10 | Localization | UI is **English-only** (ADR-41) |
 
 ## Deferred (decide later)
 
@@ -38,4 +39,3 @@ Decisions live in `DECISIONS.md` as ADRs. This file tracks what is still open.
 - [ ] **E6. History/privacy** — keep a local decision log? Retention?
 - [ ] **E7. Lint strictness** — keep `clippy::pedantic` warn + CI `-D warnings`?
 - [ ] **E9. Telemetry** — none (assumed).
-- [ ] **E10. Localization** — UI English-only in v1?

@@ -538,3 +538,16 @@ passage/ticket, not a whole document — chunked retrieval remains the
 long-term answer for large corpora. The native picker is verified on Linux
 (xdg-desktop-portal); on Windows/macOS it will need a parent window handle, and
 on macOS the panel must run on the main run loop, once those overlay hosts land.
+
+## ADR-41 — UI is English-only
+**Decision:** The user interface (overlay, tray menu, settings window, error and
+status strings) is **English-only**. There is no localization, language
+switching, or translated message catalogue in v1. This concerns the interface
+only: the model checkpoints stay multilingual where offered (ADR-39).
+**Why:** The interface is a small set of short labels and status strings, and
+there is no localization infrastructure to justify. Adding i18n now would bring
+a translation workflow and a message-catalogue dependency for little benefit;
+the strings are short and unambiguous.
+**Consequence:** All user-facing strings are English literals in the UI crates.
+Localization can be added later behind a message catalogue without touching the
+model, capture, or resolver layers.
