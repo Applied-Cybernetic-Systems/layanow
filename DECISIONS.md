@@ -562,3 +562,26 @@ regression with no product benefit. The project is local-first and the
 no-runtime-network invariant already constrains it.
 **Consequence:** No telemetry dependency or endpoint exists; adding one would
 require a new ADR. Diagnostics stay local (`tracing`, E4).
+
+## ADR-43 — License: `MIT`
+**Decision:** The project is licensed under the **MIT License** (SPDX `MIT`),
+with the canonical text in `LICENSE-MIT`; `Cargo.toml` and the Nix package
+metadata declare `MIT`.
+**Why:** MIT is permissive, short, and its only obligation is attribution, so
+the applet can be used, modified, and redistributed freely, including
+commercially.
+**Compatibility:** MIT is compatible with every dependency in the build graph:
+they are all permissive (MIT, Apache-2.0, BSD-2/3-Clause, ISC, Zlib,
+Unicode-3.0, OFL-1.1, Ubuntu-font-1.0, Unlicense, 0BSD, BSL-1.0,
+CDLA-Permissive-2.0) and grant at least the rights MIT needs. `cargo deny check
+licenses` enforces this against the allowlist in `deny.toml`. The Hugging Face
+checkpoints are compatible too: the Laya weights are Apache-2.0 (© Convai
+Innovations) and the ONNX export is MIT (Receptron); the weights are not
+redistributed (ADR-17), so only the attribution in
+`layanow_model::bundle::ATTRIBUTION` and the README is required.
+**Consequence:** `LICENSE-MIT` is the license of record. We respect dependency
+licenses by keeping `deny.toml`'s allowlist in sync with the build graph and by
+retaining their copyright and attribution notices (including the Apache-2.0
+NOTICE files, the Unicode-3.0 license, and the `epaint_default_fonts` OFL-1.1 /
+Ubuntu-font-1.0 fonts) when distributing binaries. Contributions are accepted
+under MIT unless stated otherwise.

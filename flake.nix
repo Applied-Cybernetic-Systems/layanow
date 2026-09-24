@@ -120,7 +120,6 @@
           homepage = "https://github.com/Applied-Cybernetic-Systems/layanow";
           license = with lib.licenses; [
             mit
-            asl20
           ];
           mainProgram = "layanow";
           platforms = [ "x86_64-linux" ];

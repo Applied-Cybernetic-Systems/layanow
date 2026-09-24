@@ -182,3 +182,34 @@ sets.
 - Browser/CDP integration (deferred)
 - Multi-answer (checkbox) quizzes (deferred)
 - Automatic answering of anything (this only *advises*)
+
+## License
+
+`layanow` is released under the **MIT License** ([`LICENSE-MIT`](LICENSE-MIT)),
+matching the SPDX expression in `Cargo.toml` (`MIT`). MIT is permissive, so the
+applet can be used, modified, and redistributed freely, including commercially.
+Every dependency is permissive and compatible; CI enforces the allowlist in
+`deny.toml` with `cargo deny check licenses` (ADR-43).
+
+Unless you explicitly state otherwise, any contribution intentionally submitted
+for inclusion in this project shall be licensed under the MIT License, without
+any additional terms or conditions.
+
+### Third-party notices
+
+Dependencies keep their own licenses; we do not relicense them. When
+distributing a binary, retain their copyright and attribution notices — in
+particular the Apache-2.0 `NOTICE` files, the Unicode-3.0 license, and the
+`epaint_default_fonts` fonts (OFL-1.1 / Ubuntu-font-1.0).
+
+#### Model weights
+
+The model weights are **not** distributed with this project (ADR-17); they are
+downloaded from Hugging Face on first use. They remain under their own terms:
+
+- Laya weights — © Convai Innovations, **Apache-2.0**
+  (<https://huggingface.co/convaiinnovations/laya>).
+- ONNX export — Receptron, **MIT**
+  (<https://github.com/receptron/laya>).
+
+The runtime prints this attribution (`layanow_model::bundle::ATTRIBUTION`).
