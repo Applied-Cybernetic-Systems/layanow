@@ -34,17 +34,13 @@ pub const ATTRIBUTION: &str = "Laya model weights: \u{a9} Convai Innovations, Ap
 (https://huggingface.co/convaiinnovations/laya). ONNX export: Receptron \
 (https://github.com/receptron/laya, MIT).";
 
-/// A known checkpoint: where to fetch it and how its bundle is laid out.
+/// One downloadable graph of a checkpoint at a given [`Quant`] (ADR-39).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct CheckpointSpec {
-    /// Stable id used in settings and as the settings-file value.
-    pub id: &'static str,
-    /// Human-readable name for the settings UI.
-    pub name: &'static str,
-    /// Hugging Face repo holding the ONNX bundle.
-    pub repo: &'static str,
-    /// Weight precision of the shipped graph.
+pub struct GraphVariant {
+    /// Weight precision of this graph.
     pub quant: Quant,
+    /// Hugging Face repo holding the graph and its config.
+    pub repo: &'static str,
     /// Bundle-relative graph file name.
     pub graph: &'static str,
     /// Bundle-relative external-weights file, when the graph uses one.
@@ -52,33 +48,84 @@ pub struct CheckpointSpec {
     /// Bundle-relative calibration config (`laya_config.json` or the source
     /// `rl_agent_config.json` — both carry the same keys we read).
     pub config: &'static str,
-    /// Bundle-relative tokenizer directory (holds `tokenizer.json` and
-    /// `tokenizer_config.json`).
-    pub tokenizer_dir: &'static str,
 }
 
-/// English (ModernBERT-large, 421M), the official fp32 ONNX export (ADR-36).
+/// A known checkpoint: its id, name, and the precision graphs it offers.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct CheckpointSpec {
+    /// Stable id used in settings and as the settings-file value.
+    pub id: &'static str,
+    /// Human-readable name for the settings UI.
+    pub name: &'static str,
+    /// Bundle-relative tokenizer directory (holds `tokenizer.json` and
+    /// `tokenizer_config.json`); shared by every variant.
+    pub tokenizer_dir: &'static str,
+    /// Precision variants, fp32 first (the default).
+    pub variants: &'static [GraphVariant],
+}
+
+/// English (ModernBERT-large, 421M).
+///
+/// fp32 is the official `receptron/laya-onnx` export and the default (ADR-36);
+/// fp16 is `inferenceprince/laya-onnx` (bit-near fp32, ADR-39); int8 is
+/// `inferenceprince/laya-onnx-int8` (weight-only MatMulNBits) and is offered
+/// **with a lower-accuracy warning** — it measured 19/20 top-1 agreement with
+/// fp32, below ADR-24's bar (ADR-39).
 pub const ENGLISH: CheckpointSpec = CheckpointSpec {
     id: "english",
     name: "English · ModernBERT-large",
-    repo: "receptron/laya-onnx",
-    quant: Quant::Fp32,
-    graph: "laya.onnx",
-    data: Some("laya.onnx.data"),
-    config: "laya_config.json",
     tokenizer_dir: "tokenizer",
+    variants: &[
+        GraphVariant {
+            quant: Quant::Fp32,
+            repo: "receptron/laya-onnx",
+            graph: "laya.onnx",
+            data: Some("laya.onnx.data"),
+            config: "laya_config.json",
+        },
+        GraphVariant {
+            quant: Quant::Fp16,
+            repo: "inferenceprince/laya-onnx",
+            graph: "model.onnx",
+            data: Some("model.onnx.data"),
+            config: "rl_agent_config.json",
+        },
+        GraphVariant {
+            quant: Quant::Int8,
+            repo: "inferenceprince/laya-onnx-int8",
+            graph: "model.onnx",
+            data: Some("model.onnx.data"),
+            config: "rl_agent_config.json",
+        },
+    ],
 };
 
-/// Multilingual (mmBERT-base, 322M), the community fp32 ONNX export (T-173).
+/// Multilingual (mmBERT-base, 322M).
+///
+/// fp32 is the `soyelmismo` export and the default; fp16 is the `mizchi` WebGPU
+/// export (software-emulated on CPUs without native FP16, so slower). The
+/// `soyelmismo` int8 graph is **not** offered: it collapsed to near-uniform
+/// probabilities (9/20 top-1 agreement with fp32) in evaluation (ADR-39).
 pub const MULTILINGUAL: CheckpointSpec = CheckpointSpec {
     id: "multilingual",
     name: "Multilingual · mmBERT-base",
-    repo: "soyelmismo/laya-multilingual-onnx",
-    quant: Quant::Fp32,
-    graph: "model-fp32.onnx",
-    data: None,
-    config: "rl_agent_config.json",
     tokenizer_dir: "tokenizer",
+    variants: &[
+        GraphVariant {
+            quant: Quant::Fp32,
+            repo: "soyelmismo/laya-multilingual-onnx",
+            graph: "model-fp32.onnx",
+            data: None,
+            config: "rl_agent_config.json",
+        },
+        GraphVariant {
+            quant: Quant::Fp16,
+            repo: "mizchi/laya-multilingual-onnx",
+            graph: "model.onnx",
+            data: None,
+            config: "rl_agent_config.json",
+        },
+    ],
 };
 
 /// Every checkpoint the settings UI may offer.
@@ -93,14 +140,27 @@ pub fn checkpoint(id: &str) -> Option<&'static CheckpointSpec> {
     CHECKPOINTS.iter().find(|spec| spec.id == id)
 }
 
-/// The bundle-relative files `spec` needs, in download order.
+/// The graph `spec` offers at `quant`, if any.
 #[must_use]
-pub fn files(spec: &CheckpointSpec) -> Vec<String> {
-    let mut files = vec![spec.graph.to_string()];
-    if let Some(data) = spec.data {
+pub fn variant(spec: &CheckpointSpec, quant: Quant) -> Option<&'static GraphVariant> {
+    spec.variants.iter().find(|variant| variant.quant == quant)
+}
+
+/// The graph `spec` offers at `quant`, falling back to its first (fp32)
+/// variant when that precision is not offered.
+#[must_use]
+pub fn variant_or_default(spec: &CheckpointSpec, quant: Quant) -> Option<&'static GraphVariant> {
+    variant(spec, quant).or_else(|| spec.variants.first())
+}
+
+/// The bundle-relative files `variant` needs, in download order.
+#[must_use]
+pub fn files(spec: &CheckpointSpec, variant: &GraphVariant) -> Vec<String> {
+    let mut files = vec![variant.graph.to_string()];
+    if let Some(data) = variant.data {
         files.push(data.to_string());
     }
-    files.push(spec.config.to_string());
+    files.push(variant.config.to_string());
     files.push(format!("{}/tokenizer.json", spec.tokenizer_dir));
     files.push(format!("{}/tokenizer_config.json", spec.tokenizer_dir));
     files
@@ -135,31 +195,35 @@ pub fn bundle_dir(repo: &str) -> PathBuf {
 ///
 /// Returns [`ModelError::BundleMissing`] when the files are absent and
 /// [`ALLOW_DOWNLOAD_ENV`] is unset.
-pub fn ensure_bundle(spec: &CheckpointSpec) -> Result<PathBuf, ModelError> {
-    let dir = bundle_dir(spec.repo);
-    let wanted = files(spec);
+pub fn ensure_bundle(spec: &CheckpointSpec, variant: &GraphVariant) -> Result<PathBuf, ModelError> {
+    let dir = bundle_dir(variant.repo);
+    let wanted = files(spec, variant);
     if wanted.iter().all(|file| is_present(&dir.join(file))) {
         return Ok(dir);
     }
     if non_empty_env(ALLOW_DOWNLOAD_ENV).is_none() {
         return Err(ModelError::BundleMissing { path: dir, env: ALLOW_DOWNLOAD_ENV });
     }
-    download_bundle(spec.repo, &wanted, &dir)?;
+    download_bundle(variant.repo, &wanted, &dir)?;
     Ok(dir)
 }
 
-/// Verify the cached bundle for `spec` against the published manifest.
-pub fn verify_bundle(spec: &CheckpointSpec) -> Result<(), ModelError> {
-    verify_bundle_from(spec, &bundle_dir(spec.repo))
+/// Verify the cached bundle for `variant` against the published manifest.
+pub fn verify_bundle(spec: &CheckpointSpec, variant: &GraphVariant) -> Result<(), ModelError> {
+    verify_bundle_from(spec, variant, &bundle_dir(variant.repo))
 }
 
-/// Verify the bundle in `dir` against the manifest published for `spec`.
+/// Verify the bundle in `dir` against the manifest published for `variant`.
 ///
 /// Hashes every file (SHA-256 for LFS blobs, git-object SHA-1 for small
 /// non-LFS files), so it reads the whole bundle.
-pub fn verify_bundle_from(spec: &CheckpointSpec, dir: &Path) -> Result<(), ModelError> {
-    let manifest = fetch_manifest(spec.repo)?;
-    for file in files(spec) {
+pub fn verify_bundle_from(
+    spec: &CheckpointSpec,
+    variant: &GraphVariant,
+    dir: &Path,
+) -> Result<(), ModelError> {
+    let manifest = fetch_manifest(variant.repo)?;
+    for file in files(spec, variant) {
         let expected = expect_file(&manifest, &file)?;
         verify_file(&dir.join(&file), expected, &file)?;
     }
@@ -168,17 +232,20 @@ pub fn verify_bundle_from(spec: &CheckpointSpec, dir: &Path) -> Result<(), Model
 
 /// Build a [`Checkpoint`] descriptor from an unpacked bundle directory.
 ///
-/// `spec` names the graph and config files inside `dir`; `quant` is `spec.quant`
-/// (the bundle chooses which graph to place at `spec.graph`). Does not load the
-/// graph or tokenizer.
-pub fn checkpoint_from_dir(spec: &CheckpointSpec, dir: &Path) -> Result<Checkpoint, ModelError> {
-    let config = crate::config::load(&dir.join(spec.config))?;
+/// `spec` names the tokenizer directory and `variant` the graph and config
+/// files inside `dir`. Does not load the graph or tokenizer.
+pub fn checkpoint_from_dir(
+    spec: &CheckpointSpec,
+    variant: &GraphVariant,
+    dir: &Path,
+) -> Result<Checkpoint, ModelError> {
+    let config = crate::config::load(&dir.join(variant.config))?;
     Ok(Checkpoint {
         name: spec.name.to_string(),
-        graph: dir.join(spec.graph),
+        graph: dir.join(variant.graph),
         tokenizer: dir.join(spec.tokenizer_dir).join("tokenizer.json"),
         config,
-        quant: spec.quant,
+        quant: variant.quant,
     })
 }
 
@@ -363,6 +430,20 @@ fn file_size(path: &Path) -> Option<u64> {
 mod tests {
     use super::*;
 
+    /// A checkpoint that ships only one graph, to exercise the fallback.
+    const ONLY_FP32: CheckpointSpec = CheckpointSpec {
+        id: "solo",
+        name: "Solo",
+        tokenizer_dir: "tokenizer",
+        variants: &[GraphVariant {
+            quant: Quant::Fp32,
+            repo: "example/solo",
+            graph: "g.onnx",
+            data: None,
+            config: "c.json",
+        }],
+    };
+
     #[test]
     fn known_ids_resolve_to_specs() {
         assert_eq!(checkpoint("english"), Some(&ENGLISH));
@@ -372,9 +453,28 @@ mod tests {
     }
 
     #[test]
+    fn every_checkpoint_offers_fp32_first() {
+        for spec in CHECKPOINTS {
+            assert_eq!(spec.variants.first().map(|variant| variant.quant), Some(Quant::Fp32));
+            assert!(variant(spec, Quant::Fp32).is_some());
+        }
+        // English offers int8 (with a warning); multilingual deliberately does not.
+        assert!(variant(&ENGLISH, Quant::Int8).is_some());
+        assert!(variant(&MULTILINGUAL, Quant::Int8).is_none());
+    }
+
+    #[test]
+    fn missing_variant_falls_back_to_fp32() {
+        let resolved = variant_or_default(&ONLY_FP32, Quant::Int8).expect("fallback");
+        assert_eq!(resolved.quant, Quant::Fp32);
+        assert_eq!(resolved.repo, "example/solo");
+    }
+
+    #[test]
     fn file_lists_follow_each_layout() {
+        let english_fp32 = variant(&ENGLISH, Quant::Fp32).expect("english fp32");
         assert_eq!(
-            files(&ENGLISH),
+            files(&ENGLISH, english_fp32),
             [
                 "laya.onnx",
                 "laya.onnx.data",
@@ -383,14 +483,29 @@ mod tests {
                 "tokenizer/tokenizer_config.json",
             ]
         );
+        let english_int8 = variant(&ENGLISH, Quant::Int8).expect("english int8");
+        assert_eq!(english_int8.repo, "inferenceprince/laya-onnx-int8");
         assert_eq!(
-            files(&MULTILINGUAL),
+            files(&ENGLISH, english_int8),
             [
-                "model-fp32.onnx",
+                "model.onnx",
+                "model.onnx.data",
                 "rl_agent_config.json",
                 "tokenizer/tokenizer.json",
                 "tokenizer/tokenizer_config.json",
             ]
         );
+        let multilingual_fp16 = variant(&MULTILINGUAL, Quant::Fp16).expect("multilingual fp16");
+        assert_eq!(multilingual_fp16.repo, "mizchi/laya-multilingual-onnx");
+        assert_eq!(
+            files(&MULTILINGUAL, multilingual_fp16),
+            [
+                "model.onnx",
+                "rl_agent_config.json",
+                "tokenizer/tokenizer.json",
+                "tokenizer/tokenizer_config.json",
+            ]
+        );
+        assert!(variant(&MULTILINGUAL, Quant::Int8).is_none());
     }
 }

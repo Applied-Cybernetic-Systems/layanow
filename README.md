@@ -31,11 +31,13 @@ M5 in progress: the applet is now **resident** and starts **hidden** (ADR-34).
 Run it once, then a compositor bind (or `layanow toggle`) shows the overlay;
 `Esc` hides it and `layanow quit` stops the applet. A **tray icon** (ADR-35)
 offers Toggle/Quit and a left click toggles. A standalone **settings window**
-(`layanow settings`, or the tray's **Settings…**) chooses the checkpoint, the
-low-confidence threshold, and hot vs on-demand model residency; it writes
-`~/.config/layanow/config.toml` and the applet applies the change live
-(ADR-38). The control channel is a cross-platform local socket (Unix domain
-socket / Windows named pipe) that also enforces a single instance.
+(`layanow settings`, or the tray's **Settings…**) chooses the checkpoint, its
+**precision** (fp32/fp16, plus English int8 behind a lower-accuracy warning —
+ADR-39), the low-confidence threshold, hot vs on-demand model residency, and the
+**probability-bar colours**; it writes `~/.config/layanow/config.toml` and the
+applet applies the change live (ADR-38). The control channel is a cross-platform
+local socket (Unix domain socket / Windows named pipe) that also enforces a
+single instance.
 
 ```sh
 nix develop

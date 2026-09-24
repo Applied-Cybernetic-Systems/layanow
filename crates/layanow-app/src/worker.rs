@@ -14,7 +14,7 @@
 use std::sync::mpsc::{self, Receiver, Sender};
 use std::thread::{self, JoinHandle};
 
-use layanow_model::RankedAnswer;
+use layanow_model::{Quant, RankedAnswer};
 
 /// A unit of work for the worker.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -28,11 +28,13 @@ pub enum Request {
         /// The candidate answers, in capture order.
         answers: Vec<String>,
     },
-    /// Apply changed settings: rebuild for `checkpoint` and set the unload
-    /// policy (T-113/T-117).
+    /// Apply changed settings: rebuild for `checkpoint`/`quant` and set the
+    /// unload policy (T-113/T-114/T-117).
     Configure {
         /// The checkpoint id to load.
         checkpoint: String,
+        /// The weight precision to load.
+        quant: Quant,
         /// Whether to unload the engine after each decision.
         on_demand: bool,
     },
@@ -69,8 +71,9 @@ pub trait DecisionEngine: Send + 'static {
     ) -> Result<Vec<RankedAnswer>, String>;
 }
 
-/// Builds a decision engine for a checkpoint id.
-pub type EngineFactory = Box<dyn FnMut(&str) -> Result<Box<dyn DecisionEngine>, String> + Send>;
+/// Builds a decision engine for a checkpoint id and weight precision.
+pub type EngineFactory =
+    Box<dyn FnMut(&str, Quant) -> Result<Box<dyn DecisionEngine>, String> + Send>;
 
 impl DecisionEngine for layanow_model::Decider {
     fn decide_choice(
@@ -106,17 +109,23 @@ pub struct Worker {
 }
 
 impl Worker {
-    /// Spawn a worker driven by `factory`, starting on `checkpoint`.
+    /// Spawn a worker driven by `factory`, starting on `checkpoint` at `quant`.
     ///
     /// Unless `on_demand`, the engine is loaded eagerly on the worker thread;
     /// with `on_demand` it is loaded on the first decision and dropped
     /// afterwards (T-117). Loading never blocks the caller.
-    pub fn spawn(factory: EngineFactory, checkpoint: impl Into<String>, on_demand: bool) -> Self {
+    pub fn spawn(
+        factory: EngineFactory,
+        checkpoint: impl Into<String>,
+        quant: Quant,
+        on_demand: bool,
+    ) -> Self {
         let (requests, request_rx) = mpsc::channel::<Request>();
         let (response_tx, responses) = mpsc::channel::<Response>();
         let checkpoint = checkpoint.into();
-        let handle =
-            thread::spawn(move || run(factory, &request_rx, &response_tx, checkpoint, on_demand));
+        let handle = thread::spawn(move || {
+            run(factory, &request_rx, &response_tx, checkpoint, quant, on_demand);
+        });
         Self { requests: Some(requests), responses, handle: Some(handle) }
     }
 
@@ -125,10 +134,10 @@ impl Worker {
     /// The engine is loaded eagerly and never rebuilt.
     pub fn spawn_fixed(engine: impl DecisionEngine) -> Self {
         let mut engine: Option<Box<dyn DecisionEngine>> = Some(Box::new(engine));
-        let factory: EngineFactory = Box::new(move |_| {
+        let factory: EngineFactory = Box::new(move |_, _| {
             engine.take().ok_or_else(|| "the fixed engine was already consumed".to_string())
         });
-        Self::spawn(factory, "fixed", false)
+        Self::spawn(factory, "fixed", Quant::Fp32, false)
     }
 
     /// Ask the worker to run a decision `id`. Returns immediately.
@@ -148,16 +157,17 @@ impl Worker {
             .map_err(|_| WorkerGone)
     }
 
-    /// Apply changed settings (checkpoint and unload policy).
+    /// Apply changed settings (checkpoint, precision and unload policy).
     pub fn configure(
         &self,
         checkpoint: impl Into<String>,
+        quant: Quant,
         on_demand: bool,
     ) -> Result<(), WorkerGone> {
         self.requests
             .as_ref()
             .ok_or(WorkerGone)?
-            .send(Request::Configure { checkpoint: checkpoint.into(), on_demand })
+            .send(Request::Configure { checkpoint: checkpoint.into(), quant, on_demand })
             .map_err(|_| WorkerGone)
     }
 
@@ -191,14 +201,15 @@ fn run(
     requests: &Receiver<Request>,
     responses: &Sender<Response>,
     mut checkpoint: String,
+    mut quant: Quant,
     mut on_demand: bool,
 ) {
-    let mut engine = if on_demand { None } else { load(&mut factory, &checkpoint) };
+    let mut engine = if on_demand { None } else { load(&mut factory, &checkpoint, quant) };
     while let Ok(request) = requests.recv() {
         match request {
             Request::Decide { id, question, answers } => {
                 if engine.is_none() {
-                    engine = load(&mut factory, &checkpoint);
+                    engine = load(&mut factory, &checkpoint, quant);
                 }
                 let response = match engine.as_mut() {
                     Some(engine) => match engine.decide_choice(&question, &answers) {
@@ -216,12 +227,17 @@ fn run(
                     engine = None;
                 }
             }
-            Request::Configure { checkpoint: next, on_demand: next_on_demand } => {
-                if next != checkpoint {
+            Request::Configure {
+                checkpoint: next,
+                quant: next_quant,
+                on_demand: next_on_demand,
+            } => {
+                if next != checkpoint || next_quant != quant {
                     checkpoint = next;
+                    quant = next_quant;
                     engine = None;
                     if !next_on_demand {
-                        engine = load(&mut factory, &checkpoint);
+                        engine = load(&mut factory, &checkpoint, quant);
                     }
                 }
                 on_demand = next_on_demand;
@@ -233,13 +249,17 @@ fn run(
     }
 }
 
-/// Build the engine for `checkpoint`, logging (and swallowing) a load failure so
-/// the next decision can report it to the UI.
-fn load(factory: &mut EngineFactory, checkpoint: &str) -> Option<Box<dyn DecisionEngine>> {
-    match factory(checkpoint) {
+/// Build the engine for `checkpoint` at `quant`, logging (and swallowing) a load
+/// failure so the next decision can report it to the UI.
+fn load(
+    factory: &mut EngineFactory,
+    checkpoint: &str,
+    quant: Quant,
+) -> Option<Box<dyn DecisionEngine>> {
+    match factory(checkpoint, quant) {
         Ok(engine) => Some(engine),
         Err(error) => {
-            tracing::error!(%error, checkpoint, "could not load the model");
+            tracing::error!(%error, checkpoint, ?quant, "could not load the model");
             None
         }
     }
@@ -313,11 +333,11 @@ mod tests {
 
         let builds = Arc::new(AtomicU32::new(0));
         let counter = Arc::clone(&builds);
-        let factory: EngineFactory = Box::new(move |_| {
+        let factory: EngineFactory = Box::new(move |_, _| {
             counter.fetch_add(1, Ordering::Relaxed);
             Ok(Box::new(ByLength))
         });
-        let worker = Worker::spawn(factory, "test", true);
+        let worker = Worker::spawn(factory, "test", Quant::Fp32, true);
         for id in 0..2 {
             worker.decide(id, "q".to_string(), vec!["a".to_string()]).unwrap();
             drop(worker.recv().unwrap());
@@ -331,16 +351,35 @@ mod tests {
 
         let seen = Arc::new(Mutex::new(Vec::new()));
         let log = Arc::clone(&seen);
-        let factory: EngineFactory = Box::new(move |checkpoint| {
+        let factory: EngineFactory = Box::new(move |checkpoint, _| {
             log.lock().expect("test lock").push(checkpoint.to_string());
             Ok(Box::new(ByLength))
         });
-        let worker = Worker::spawn(factory, "english", false);
+        let worker = Worker::spawn(factory, "english", Quant::Fp32, false);
         worker.decide(0, "q".to_string(), vec!["a".to_string()]).unwrap();
         drop(worker.recv().unwrap());
-        worker.configure("multilingual", false).unwrap();
+        worker.configure("multilingual", Quant::Fp32, false).unwrap();
         worker.decide(1, "q".to_string(), vec!["a".to_string()]).unwrap();
         drop(worker.recv().unwrap());
         assert_eq!(&*seen.lock().expect("test lock"), &["english", "multilingual"]);
+    }
+
+    #[test]
+    fn reconfigure_swaps_the_precision() {
+        use std::sync::{Arc, Mutex};
+
+        let seen = Arc::new(Mutex::new(Vec::new()));
+        let log = Arc::clone(&seen);
+        let factory: EngineFactory = Box::new(move |_, quant| {
+            log.lock().expect("test lock").push(quant);
+            Ok(Box::new(ByLength))
+        });
+        let worker = Worker::spawn(factory, "english", Quant::Fp32, false);
+        worker.decide(0, "q".to_string(), vec!["a".to_string()]).unwrap();
+        drop(worker.recv().unwrap());
+        worker.configure("english", Quant::Int8, false).unwrap();
+        worker.decide(1, "q".to_string(), vec!["a".to_string()]).unwrap();
+        drop(worker.recv().unwrap());
+        assert_eq!(&*seen.lock().expect("test lock"), &[Quant::Fp32, Quant::Int8]);
     }
 }

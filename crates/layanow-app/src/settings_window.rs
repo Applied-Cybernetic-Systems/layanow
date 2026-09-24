@@ -13,6 +13,7 @@
 use eframe::egui;
 
 use crate::settings::{Settings, UnloadPolicy};
+use layanow_model::Quant;
 use layanow_model::bundle;
 use layanow_platform::control::{self, Command, ControlError};
 
@@ -36,8 +37,8 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
             .with_title("layanow settings")
-            .with_inner_size([460.0, 340.0])
-            .with_min_inner_size([380.0, 280.0]),
+            .with_inner_size([480.0, 470.0])
+            .with_min_inner_size([400.0, 360.0]),
         ..Default::default()
     };
     let result = eframe::run_native(
@@ -100,10 +101,46 @@ impl eframe::App for SettingsApp {
                         );
                     }
                 });
-            if let Some(spec) = bundle::checkpoint(&self.settings.checkpoint) {
-                ui.small(spec.repo);
+            let spec = bundle::checkpoint(&self.settings.checkpoint);
+            if let Some(spec) = spec {
+                ui.small(format!("{} graph variant(s) available", spec.variants.len()));
+                // A checkpoint change may drop the currently selected precision;
+                // fall back to its first (fp32) variant.
+                if bundle::variant(spec, self.settings.quant).is_none() {
+                    if let Some(first) = spec.variants.first() {
+                        self.settings.quant = first.quant;
+                    }
+                }
             } else {
                 ui.small(format!("unknown checkpoint {:?}", self.settings.checkpoint));
+            }
+
+            ui.add_space(10.0);
+            ui.label("Precision");
+            egui::ComboBox::from_id_salt("quant")
+                .width(300.0)
+                .selected_text(quant_label(self.settings.quant))
+                .show_ui(ui, |ui| {
+                    if let Some(spec) = spec {
+                        for variant in spec.variants {
+                            ui.selectable_value(
+                                &mut self.settings.quant,
+                                variant.quant,
+                                quant_label(variant.quant),
+                            );
+                        }
+                    }
+                });
+            ui.small(
+                "fp32: highest fidelity · fp16: smaller, slower on CPUs without native FP16 · \
+                 int8: smallest and fastest, opt-in (ADR-24/39)",
+            );
+            if self.settings.quant == Quant::Int8 {
+                ui.colored_label(
+                    crate::theme::YELLOW,
+                    "⚠ int8 can change answers: 19/20 top-1 agreement with fp32 in our \
+                     evaluation (ADR-39).",
+                );
             }
 
             ui.add_space(10.0);
@@ -126,6 +163,18 @@ impl eframe::App for SettingsApp {
                 "On demand — unload after each decision (slower next answer)",
             );
 
+            ui.add_space(10.0);
+            ui.label("Probability colours");
+            ui.horizontal(|ui| {
+                ui.label("low");
+                ui.color_edit_button_srgb(&mut self.settings.palette.low);
+                ui.label("mid");
+                ui.color_edit_button_srgb(&mut self.settings.palette.mid);
+                ui.label("high");
+                ui.color_edit_button_srgb(&mut self.settings.palette.high);
+            });
+            ui.small("The bar colour lerps low → mid → high as the probability rises.");
+
             ui.add_space(12.0);
             if let Some(status) = &self.status {
                 ui.label(status);
@@ -145,6 +194,15 @@ fn checkpoint_label(id: &str) -> String {
     bundle::checkpoint(id).map_or_else(|| id.to_string(), |spec| spec.name.to_string())
 }
 
+/// The display label for a weight precision.
+fn quant_label(quant: Quant) -> &'static str {
+    match quant {
+        Quant::Fp32 => "fp32 — highest fidelity",
+        Quant::Fp16 => "fp16 — smaller, slower on CPU",
+        Quant::Int8 => "int8 — smallest, fastest (lower accuracy)",
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -153,5 +211,11 @@ mod tests {
     fn checkpoint_label_falls_back_to_the_id() {
         assert_eq!(checkpoint_label("english"), bundle::ENGLISH.name);
         assert_eq!(checkpoint_label("mystery"), "mystery");
+    }
+
+    #[test]
+    fn quant_labels_are_distinct() {
+        assert_ne!(quant_label(Quant::Fp32), quant_label(Quant::Fp16));
+        assert_ne!(quant_label(Quant::Fp16), quant_label(Quant::Int8));
     }
 }

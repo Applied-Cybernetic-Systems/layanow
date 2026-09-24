@@ -9,15 +9,17 @@
 //! cargo run -p layanow-model --example smoke
 //! ```
 
-use layanow_model::{Decider, bundle};
+use layanow_model::{Decider, Quant, bundle};
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let spec = &bundle::ENGLISH;
-    let dir = bundle::ensure_bundle(spec)?;
+    let variant = bundle::variant_or_default(spec, Quant::Fp32)
+        .ok_or("the english checkpoint has no graph variant")?;
+    let dir = bundle::ensure_bundle(spec, variant)?;
     eprintln!("using bundle at {}", dir.display());
     println!("{}", bundle::ATTRIBUTION);
 
-    let checkpoint = bundle::checkpoint_from_dir(spec, &dir)?;
+    let checkpoint = bundle::checkpoint_from_dir(spec, variant, &dir)?;
     let mut decider = Decider::load(&checkpoint)?;
 
     let question = "Which planet is known as the Red Planet?";

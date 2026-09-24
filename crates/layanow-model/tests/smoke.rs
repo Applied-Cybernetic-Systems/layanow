@@ -10,14 +10,16 @@
 
 #![cfg_attr(test, allow(clippy::unwrap_used, clippy::expect_used, clippy::panic))]
 
-use layanow_model::{Decider, ModelError, bundle};
+use layanow_model::{Decider, ModelError, Quant, bundle};
 
 #[test]
 #[ignore = "needs the Laya ONNX bundle; set LAYANOW_ALLOW_MODEL_DOWNLOAD=1 to fetch it"]
 fn three_option_choice_is_plausible() {
-    let dir = bundle::ensure_bundle(&bundle::ENGLISH).expect("bundle unavailable");
-    bundle::verify_bundle_from(&bundle::ENGLISH, &dir).expect("bundle integrity");
-    let checkpoint = bundle::checkpoint_from_dir(&bundle::ENGLISH, &dir).expect("descriptor");
+    let spec = &bundle::ENGLISH;
+    let variant = bundle::variant_or_default(spec, Quant::Fp32).expect("variant");
+    let dir = bundle::ensure_bundle(spec, variant).expect("bundle unavailable");
+    bundle::verify_bundle_from(spec, variant, &dir).expect("bundle integrity");
+    let checkpoint = bundle::checkpoint_from_dir(spec, variant, &dir).expect("descriptor");
     let mut decider = Decider::load(&checkpoint).expect("load session");
 
     let answers = vec!["Venus".to_string(), "Mars".to_string(), "Jupiter".to_string()];
@@ -35,8 +37,10 @@ fn three_option_choice_is_plausible() {
 #[test]
 #[ignore = "needs the multilingual ONNX bundle; set LAYANOW_ALLOW_MODEL_DOWNLOAD=1 to fetch it"]
 fn multilingual_choice_is_plausible() {
-    let dir = bundle::ensure_bundle(&bundle::MULTILINGUAL).expect("bundle unavailable");
-    let checkpoint = bundle::checkpoint_from_dir(&bundle::MULTILINGUAL, &dir).expect("descriptor");
+    let spec = &bundle::MULTILINGUAL;
+    let variant = bundle::variant_or_default(spec, Quant::Fp32).expect("variant");
+    let dir = bundle::ensure_bundle(spec, variant).expect("bundle unavailable");
+    let checkpoint = bundle::checkpoint_from_dir(spec, variant, &dir).expect("descriptor");
     let mut decider = Decider::load(&checkpoint).expect("load session");
 
     let answers = vec!["Venus".to_string(), "Mars".to_string(), "Jupiter".to_string()];
@@ -56,6 +60,8 @@ fn missing_files_fail_verification() {
     // An empty directory can never match the manifest's sizes/digests.
     let dir = std::env::temp_dir().join(format!("layanow-verify-{}", std::process::id()));
     std::fs::create_dir_all(&dir).unwrap();
-    let result = bundle::verify_bundle_from(&bundle::ENGLISH, &dir);
+    let spec = &bundle::ENGLISH;
+    let variant = bundle::variant_or_default(spec, Quant::Fp32).unwrap();
+    let result = bundle::verify_bundle_from(spec, variant, &dir);
     assert!(matches!(result, Err(ModelError::ChecksumMismatch { .. })));
 }

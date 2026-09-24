@@ -20,6 +20,7 @@ ort = { version = "=2.0.0-rc.13", default-features = false, features = [
 # checkpoint is BPE + ByteLevel; `fancy-regex` supplies the pure-Rust regex
 # backend so we do not need the default oniguruma C dependency.
 tokenizers = { version = "0.23.2", default-features = false, features = ["fancy-regex"] }
+serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 thiserror = "2"
 # Structured diagnostics (E4).

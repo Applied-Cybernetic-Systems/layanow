@@ -5,9 +5,10 @@
 
 use std::path::PathBuf;
 
+use layanow_model::Quant;
 use serde::{Deserialize, Serialize};
 
-use crate::results::DEFAULT_CONFIDENCE_THRESHOLD;
+use crate::results::{DEFAULT_CONFIDENCE_THRESHOLD, Palette};
 
 /// Whether the model stays resident or is unloaded between decisions
 /// (ADR-11, T-117).
@@ -28,19 +29,26 @@ pub struct Settings {
     /// Id of the checkpoint to load (ADR-7). An unknown id falls back to the
     /// default checkpoint at load time.
     pub checkpoint: String,
+    /// Weight precision of the graph to load (T-114, ADR-39). A precision the
+    /// checkpoint does not offer falls back to fp32 at load time.
+    pub quant: Quant,
     /// Confidence below which a decision is flagged as low-confidence
     /// (ADR-27 C2). The app never refuses to answer.
     pub confidence_threshold: f32,
     /// Hot vs on-demand model residency (ADR-11, T-117).
     pub unload: UnloadPolicy,
+    /// Probability-bar colour anchors (T-116).
+    pub palette: Palette,
 }
 
 impl Default for Settings {
     fn default() -> Self {
         Self {
             checkpoint: layanow_model::bundle::DEFAULT_ID.to_string(),
+            quant: Quant::Fp32,
             confidence_threshold: DEFAULT_CONFIDENCE_THRESHOLD,
             unload: UnloadPolicy::Hot,
+            palette: Palette::default(),
         }
     }
 }
@@ -103,8 +111,10 @@ mod tests {
         let parsed: Settings = toml::from_str(&text).expect("parse");
         assert_eq!(parsed, settings);
         assert_eq!(parsed.checkpoint, layanow_model::bundle::DEFAULT_ID);
+        assert_eq!(parsed.quant, Quant::Fp32);
         assert!((parsed.confidence_threshold - DEFAULT_CONFIDENCE_THRESHOLD).abs() < f32::EPSILON);
         assert_eq!(parsed.unload, UnloadPolicy::Hot);
+        assert_eq!(parsed.palette, Palette::default());
     }
 
     #[test]
@@ -112,7 +122,23 @@ mod tests {
         let parsed: Settings =
             toml::from_str("confidence_threshold = 0.7\nunload = \"on-demand\"\n").expect("parse");
         assert_eq!(parsed.checkpoint, layanow_model::bundle::DEFAULT_ID);
+        assert_eq!(parsed.quant, Quant::Fp32);
         assert!((parsed.confidence_threshold - 0.7).abs() < f32::EPSILON);
         assert_eq!(parsed.unload, UnloadPolicy::OnDemand);
+        assert_eq!(parsed.palette, Palette::default());
+    }
+
+    #[test]
+    fn precision_and_palette_round_trip_through_toml() {
+        let settings = Settings {
+            quant: Quant::Int8,
+            palette: Palette { low: [1, 2, 3], mid: [4, 5, 6], high: [7, 8, 9] },
+            ..Settings::default()
+        };
+        let text = toml::to_string_pretty(&settings).expect("serialize");
+        let parsed: Settings = toml::from_str(&text).expect("parse");
+        assert_eq!(parsed.quant, Quant::Int8);
+        assert_eq!(parsed.palette.low, [1, 2, 3]);
+        assert_eq!(parsed.palette.high, [7, 8, 9]);
     }
 }

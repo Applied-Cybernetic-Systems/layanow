@@ -13,9 +13,9 @@ General-purpose ("any text"), with Linux (Wayland + X11) first.
 
 ### v1 (Linux)
 - Resident **tray applet** (no separate daemon) written in Rust.
-- **Laya via ONNX Runtime** (`ort`), **English fp32** by default (multilingual
-  and int8 via settings), **CPU-only**, **hot** resident model (soft budget
-  ≤ 3 GB, ADR-11/36).
+- **Laya via ONNX Runtime** (`ort`), **English fp32** by default (multilingual,
+  fp16, and English int8 — with a lower-accuracy warning — via settings),
+  **CPU-only**, **hot** resident model (soft budget ≤ 3 GB, ADR-11/36/39).
 - Hotkey → full-screen **egui overlay**. The overlay is **click-through** and
   never captures the pointer (ADR-14): the user selects text natively in the
   target app, and each selection becomes an item (first = question, rest =
@@ -113,7 +113,7 @@ native selection (click-through overlay) ─▶ TextResolver.resolve_current_sel
 | M2 | **`layanow-model`** (done): tokenizer + rendering + calibration port; golden tests vs `rl_common.py` (ADR-29) |
 | M3 | **Click-through overlay + item model + results panel** (done): `Session` model, capture stub (replaced by the M4 selection backend), inference worker, results panel, and a Wayland `wlr-layer-shell` overlay rendering egui via EGL/`egui_glow` (ADR-30/31) |
 | M4 | **Linux selection backends** (in progress): Wayland PRIMARY (`wl-clipboard-rs`) with `Tab`-commit capture done (ADR-33); X11 (`x11rb`) pending |
-| M5 | **Control socket + hidden-by-default overlay + `layanow toggle` + tray icon + standalone settings window done (ADR-34/35/38)**; probability-colour setting (T-116) and int8 (T-114, gated on T-121) pending |
+| M5 | **Control socket + hidden-by-default overlay + `layanow toggle` + tray icon + standalone settings window done (ADR-34/35/38)**; per-checkpoint precision fp32/fp16 (+ English int8 behind a lower-accuracy warning, ADR-39) and probability-colour settings (T-114/T-116) done |
 | M6 | Polish: no-clipboard-clobber guarantees, error popup, history, docs |
 | M7 | Windows selection backend · M8 macOS selection backend · M9 accessibility resolver · M10 OCR |
 

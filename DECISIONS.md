@@ -463,3 +463,39 @@ immediately, and a checkpoint change rebuilds the model on the worker thread
 on-demand policy dropping it after each decision. The worker's eager load moved
 off the startup path, so the applet now starts before the model is ready (a load
 failure surfaces on the first decision / in the log rather than at launch).
+
+## ADR-39 — Per-checkpoint precision variants (fp32 / fp16 / int8)
+**Decision:** A checkpoint now offers one or more `GraphVariant`s, each pinning a
+Hugging Face repo and graph file; the settings UI picks one and `Quant`
+(`Fp32`/`Fp16`/`Int8`) selects which graph is downloaded and loaded. fp32 stays
+the default. fp16 is offered for **both** checkpoints; int8 is offered for
+**English only** and carries a lower-accuracy warning. This amends ADR-24 (the
+quantization method), ADR-36 (int8 is no longer "not yet offered") and ADR-37
+(mizchi fp16 is now used).
+**Why:** T-114/T-121. Each candidate graph was evaluated against its fp32
+reference on a 20-case self-made MCQ set (`layanow-model --example
+precision_parity`, `LAYANOW_ALLOW_MODEL_DOWNLOAD=1`):
+- English fp16 (`inferenceprince/laya-onnx`): 20/20 top-1 agreement, max
+  `|p-q| = 1.3e-3`.
+- English int8 (`inferenceprince/laya-onnx-int8`, weight-only `MatMulNBits`):
+  19/20, max `|p-q| = 3.5e-2` — below ADR-24's ≥99% bar. The one flip is a
+  near-tie ("capital of France") where fp32 itself picks the wrong answer
+  (Berlin) and int8 picks Paris.
+- Multilingual fp16 (`mizchi/laya-multilingual-onnx`): 20/20, max
+  `|p-q| = 5.5e-4`.
+- Multilingual int8 (`soyelmismo/laya-multilingual-onnx` `model-int8.onnx`):
+  9/20; the logits collapse to near-uniform (~1/K) for every option and every
+  language tried (English, French, Spanish, German, Bulgarian, Japanese), so
+  the graph is unusable and is **not registered**.
+Weight-only int8 (`MatMulNBits`) is used instead of ADR-24's
+`quantize_dynamic`, which both the M1 spike and the inferenceprince results
+show destroys this model. fp16 is kept despite ADR-37's earlier rejection
+because it is numerically clean; it is slower on CPUs without native FP16,
+which the settings label says.
+**Consequence:** `Quant` gains `Fp16`; `CheckpointSpec` holds `variants`;
+`Settings` gains `quant`, and the worker reloads when it changes. English int8
+is offered behind an explicit accuracy warning in the settings window;
+multilingual int8 is not offered. A checkpoint whose requested precision is
+absent (e.g. multilingual + int8 in a hand-edited config) falls back to fp32
+with a log warning. `layanow-model --example precision_parity` records the
+evidence and must be rerun before registering a new precision variant.

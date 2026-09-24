@@ -27,7 +27,7 @@ use layanow_platform::control::Command;
 use layanow_platform::overlay::OverlayApp;
 use layanow_resolvers::TextResolver;
 
-use crate::results::{self, DEFAULT_CONFIDENCE_THRESHOLD, Results};
+use crate::results::{self, DEFAULT_CONFIDENCE_THRESHOLD, Palette, Results};
 use crate::settings::{Settings, UnloadPolicy};
 use crate::theme;
 use crate::worker::{Response, Worker};
@@ -63,6 +63,8 @@ pub struct Overlay {
     commands: Receiver<Command>,
     phase: Phase,
     threshold: f32,
+    /// Probability-bar colour anchors from settings (T-116).
+    palette: Palette,
     /// A short user-facing hint (e.g. "no selection") drawn while capturing.
     status: Option<String>,
     /// Freely typed item text, captured when `Tab` is pressed.
@@ -97,6 +99,7 @@ impl Overlay {
             commands,
             phase: Phase::Capturing,
             threshold: DEFAULT_CONFIDENCE_THRESHOLD,
+            palette: Palette::default(),
             status: None,
             entry: String::new(),
             next_request: 0,
@@ -118,8 +121,9 @@ impl Overlay {
     fn apply_settings(&mut self) {
         let settings = Settings::load();
         self.threshold = settings.confidence_threshold;
+        self.palette = settings.palette;
         let on_demand = settings.unload == UnloadPolicy::OnDemand;
-        if let Err(error) = self.worker.configure(settings.checkpoint, on_demand) {
+        if let Err(error) = self.worker.configure(settings.checkpoint, settings.quant, on_demand) {
             tracing::warn!(%error, "could not apply settings");
         }
     }
@@ -217,9 +221,11 @@ impl Overlay {
             }
             self.pending_request = None;
             self.phase = match response {
-                Response::Ranked { ranked, .. } => {
-                    Phase::Results(Box::new(results::results(&ranked, self.threshold)))
-                }
+                Response::Ranked { ranked, .. } => Phase::Results(Box::new(results::results(
+                    &ranked,
+                    self.threshold,
+                    &self.palette,
+                ))),
                 Response::Failed { error, .. } => Phase::Error(error),
             };
         }

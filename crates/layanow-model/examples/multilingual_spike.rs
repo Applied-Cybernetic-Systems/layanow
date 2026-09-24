@@ -27,14 +27,17 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let spec = bundle::CheckpointSpec {
         id: "local-multilingual",
         name: "laya-multilingual (local export)",
-        repo: "",
+        tokenizer_dir: "tokenizer",
+        variants: &[],
+    };
+    let variant = bundle::GraphVariant {
         quant,
+        repo: "",
         graph: "laya.onnx",
         data: None,
         config: "laya_config.json",
-        tokenizer_dir: "tokenizer",
     };
-    let checkpoint = bundle::checkpoint_from_dir(&spec, &dir)?;
+    let checkpoint = bundle::checkpoint_from_dir(&spec, &variant, &dir)?;
     let mut decider = Decider::load(&checkpoint)?;
     eprintln!(
         "loaded {:?} checkpoint from {} (peak RSS {} MiB)",

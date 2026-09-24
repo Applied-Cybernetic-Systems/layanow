@@ -18,9 +18,11 @@ We run it via **ONNX Runtime** in Rust (`ort`), not the Python `laya` package
 
 Each checkpoint ships its own `encoder/`, `tokenizer/`, `model.safetensors`, and
 `rl_agent_config.json`. One checkpoint is resident (ADR-11); choice is a settings
-toggle (ADR-7). The shipped default is the published English **fp32** bundle
-(`receptron/laya-onnx`); multilingual and dynamic int8 graphs are build-time
-exports, with int8 an opt-in setting (ADR-28/36).
+toggle (ADR-7). Each checkpoint offers precision variants (`CheckpointSpec` in
+`layanow-model::bundle`): English ships fp32 (`receptron/laya-onnx`), fp16 and
+weight-only int8 (`inferenceprince`); multilingual ships fp32 (`soyelmismo`) and
+fp16 (`mizchi`). fp32 is the default, fp16 is a clean low-precision option, and
+English int8 is opt-in **with a lower-accuracy warning** (ADR-28/36/39).
 
 ## ONNX graph contract
 
@@ -124,6 +126,15 @@ multilingual checkpoint defaults to fp32** (ADR-28), with int8 an opt-in
 setting. The shipped English bundle (`receptron/laya-onnx`) is also fp32 and is
 the default; ADR-36 makes int8 opt-in there too (T-114).
 
+**T-121 result (shipped graphs, ADR-39).** Re-evaluated the actual community
+exports against fp32 on a 20-case self-made MCQ set
+(`layanow-model --example precision_parity`): fp16 is effectively exact for both
+checkpoints (20/20; max `|p-q| ≤ 1.3e-3`). Weight-only int8
+(`inferenceprince/laya-onnx-int8`, `MatMulNBits`) reaches 19/20 for English —
+below the ≥ 99% bar, so it is offered only behind a lower-accuracy warning. The
+`soyelmismo` multilingual `model-int8.onnx` collapses to near-uniform
+probabilities (9/20) in every language tested and is **not registered**.
+
 ## Calibration & confidence
 
 - Apply temperature scaling from `laya_config.json` (`temperature` per qtype,
@@ -142,16 +153,19 @@ The known exports are described by the `CheckpointSpec` registry in
 
 ### Ready-made (English, default)
 `receptron/laya-onnx` — `laya.onnx` + `laya.onnx.data` (+ `laya_config.json`,
-`tokenizer/`), fp32. (The old `Mattepiu/laya-onnx` int8 alternative is unverified
-and not in the registry.)
+`tokenizer/`), fp32 (default). Lower precision variants:
+`inferenceprince/laya-onnx` (fp16) and `inferenceprince/laya-onnx-int8`
+(weight-only `MatMulNBits` int8, offered with a lower-accuracy warning).
 
 ### Ready-made (multilingual)
 `soyelmismo/laya-multilingual-onnx` — `model-fp32.onnx` (mmBERT-base, fp32) +
-`rl_agent_config.json` + `tokenizer/`. Verified end-to-end (download → manifest
-digest → `ort` load → 3-option `choice`). The repo also ships a selective
-`model-int8.onnx`, which is **not** in the registry (int8 stays opt-in and is
-gated on T-121). `mizchi/laya-multilingual-onnx` has the same layout but fp16
-weights (~3900 ms/decision on CPU) and is not used.
+`rl_agent_config.json` + `tokenizer/` (default). Verified end-to-end
+(download → manifest digest → `ort` load → 3-option `choice`). The repo also
+ships a selective `model-int8.onnx`, which is **not** in the registry: it was
+evaluated and collapses to near-uniform probabilities (ADR-39).
+`mizchi/laya-multilingual-onnx` (fp16) is the registered low-precision option;
+it is numerically clean but slower on CPUs without native FP16
+(~3900 ms/decision).
 
 ### Exporting a checkpoint yourself (multilingual / typed-decisions)
 Build-time only; Python + torch never shipped. Driven by

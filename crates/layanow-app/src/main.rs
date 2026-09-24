@@ -142,7 +142,7 @@ fn run_applet() -> Result<(), Box<dyn std::error::Error>> {
 /// later settings change can swap the checkpoint without freezing the overlay
 /// (T-113/T-117).
 fn build_worker(settings: &Settings) -> Worker {
-    let factory: EngineFactory = Box::new(|checkpoint_id| {
+    let factory: EngineFactory = Box::new(|checkpoint_id, quant| {
         let spec = bundle::checkpoint(checkpoint_id)
             .or_else(|| bundle::checkpoint(bundle::DEFAULT_ID))
             .ok_or_else(|| "no checkpoints are registered".to_string())?;
@@ -153,12 +153,31 @@ fn build_worker(settings: &Settings) -> Worker {
                 "unknown checkpoint; using the default"
             );
         }
-        let dir = bundle::ensure_bundle(spec).map_err(|error| error.to_string())?;
-        tracing::info!(checkpoint = spec.id, path = %dir.display(), "using bundle");
+        let variant = bundle::variant_or_default(spec, quant)
+            .ok_or_else(|| format!("checkpoint {} has no graph variants", spec.id))?;
+        if variant.quant != quant {
+            tracing::warn!(
+                requested = ?quant,
+                using = ?variant.quant,
+                "precision unavailable for this checkpoint; using the default"
+            );
+        }
+        let dir = bundle::ensure_bundle(spec, variant).map_err(|error| error.to_string())?;
+        tracing::info!(
+            checkpoint = spec.id,
+            quant = ?variant.quant,
+            path = %dir.display(),
+            "using bundle"
+        );
         let checkpoint =
-            bundle::checkpoint_from_dir(spec, &dir).map_err(|error| error.to_string())?;
+            bundle::checkpoint_from_dir(spec, variant, &dir).map_err(|error| error.to_string())?;
         let decider = Decider::load(&checkpoint).map_err(|error| error.to_string())?;
         Ok(Box::new(decider))
     });
-    Worker::spawn(factory, settings.checkpoint.clone(), settings.unload == UnloadPolicy::OnDemand)
+    Worker::spawn(
+        factory,
+        settings.checkpoint.clone(),
+        settings.quant,
+        settings.unload == UnloadPolicy::OnDemand,
+    )
 }

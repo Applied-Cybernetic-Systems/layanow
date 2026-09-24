@@ -26,17 +26,14 @@ agents must update it whenever work is started, finished, or newly discovered.
 ### M4 — Linux selection backends (deferred)
 - **T-100** · 2026-09-22 · M4 · platform — X11 selection backend reading PRIMARY via `x11rb`. Deferred by user decision 2026-09-22; Wayland is the only backend for now. (ADR-21, `RESOLVERS.md`)
 
-### M5 — tray, settings, toggle
-- **T-114** · 2026-09-22 · M5 · app — int8/fp32 setting; make `Quant` actually select the graph file instead of being metadata. Default stays **fp32**; int8 is opt-in (ADR-36). Blocked on T-121; the settings window (T-113) is ready to host it. (ADR-7/11/28/36)
-- **T-116** · 2026-09-22 · M5 · app — Probability colour settings.
-
 ### Model
-- **T-121** · 2026-09-22 · model — Confirm int8-vs-fp32 accuracy for the chosen English artifact against ADR-24's bar before offering int8 as an opt-in setting. (ADR-24/28/36)
 - **T-122** · 2026-09-22 · model — Checkpoint registry with lazy load + LRU eviction (one session resident). A `CheckpointSpec` registry and settings-driven selection landed (T-173); the session is still loaded once at startup and is not yet cached/reloaded on a settings change. (`LAYA.md`)
 - **T-123** · 2026-09-22 · model — Multi-answer (`choice`) support: mark options above a probability threshold. (ADR-8/27-C6)
 - **T-124** · 2026-09-22 · model — Optional checkpoint auto-routing (port Laya's `Router`). (ADR-7, v2+)
 - **T-125** · 2026-09-22 · model — Map `ModelError` variants to actionable, user-facing messages instead of a raw `to_string()` handed to the UI. (ADR-18)
 - **T-173** · 2026-09-22 · model — Align `DEFAULT_REPO` with the consolidated hub. **Closed:** 2026-09-22 · decision (ADR-37): keep `receptron/laya-onnx` as the default English fp32 ONNX and add the community `soyelmismo/laya-multilingual-onnx` fp32 export for multilingual, behind a new `CheckpointSpec` registry. The `convaiinnovations/laya` hub publishes safetensors, not ONNX, so it cannot be loaded directly. Verified the multilingual export end-to-end: it downloads/verifies through the Hugging Face manifest, loads in `ort`, and ranks a 3-option `choice` correctly. Shipped in the `feat(model): checkpoint registry and multilingual ONNX source (T-173)` commit (`bundle.rs`, `LAYA.md`).
+
+- **T-178** · 2026-09-23 · model — Accuracy of the checkpoints themselves: English fp32 picks Berlin over Paris for "capital of France" (0.33), and multilingual fp32 misses some simple French/Italian capitals. Evaluate and document model limits (the `precision_parity` example is a start). (ADR-12)
 
 ### Capture & resolvers
 - **T-130** · 2026-09-22 · resolve — Move the PRIMARY read off the UI thread (blocking `get_contents` currently runs inside `update`; a stalled owner freezes the overlay). (ADR-33)
@@ -71,6 +68,10 @@ agents must update it whenever work is started, finished, or newly discovered.
 _(empty — pick a task from **Open** and move its line here when you start it.)_
 
 ## Closed
+
+- **T-114** · 2026-09-22 · M5 · app — int8/fp32 setting; make `Quant` actually select the graph file instead of being metadata. Default stays **fp32**; int8 is opt-in (ADR-36). Blocked on T-121; the settings window (T-113) is ready to host it. (ADR-7/11/28/36) **Closed:** 2026-09-23 · `Quant` now selects a `GraphVariant` (fp32/fp16/int8) per checkpoint; the settings window gained a **Precision** dropdown and `Settings.quant` persists in `config.toml`; the worker rebuilds the engine when checkpoint or precision changes. English offers fp32/fp16/int8 (int8 behind a lower-accuracy warning); multilingual offers fp32/fp16 only (int8 rejected). Shipped in the `feat: precision variants and probability colours (T-114/T-116/T-121)` commit (ADR-39).
+- **T-116** · 2026-09-22 · M5 · app — Probability colour settings. **Closed:** 2026-09-23 · `Settings.palette` stores the three probability-bar anchor colours (low/mid/high, defaulting to the gruvbox red/orange/green); the settings window has three colour pickers and `results::probability_colour` lerps through them, applied live on `Reload`. Shipped in the same commit (ADR-32/39).
+- **T-121** · 2026-09-22 · model — Confirm int8-vs-fp32 accuracy for the chosen English artifact against ADR-24's bar before offering int8 as an opt-in setting. (ADR-24/28/36) **Closed:** 2026-09-23 · evaluated the shipped graphs against fp32 on a 20-case self-made MCQ set via `layanow-model --example precision_parity`: fp16 is effectively exact for both checkpoints (20/20, max `|p-q| ≤ 1.3e-3`); English int8 is 19/20 (below the ≥99% bar → offered only with a warning); multilingual int8 is 9/20 and near-uniform in every language → not registered. Shipped in the same commit (ADR-24/39).
 
 - **T-001** · 2026-09-22 · M4/app — Wayland PRIMARY highlight capture + typed entry, committed with `Tab` (first = question, rest = answers). **Closed:** 2026-09-22 · verified end-to-end (Brave highlight captured while the overlay held the keyboard; clipboard untouched) and shipped in the `feat(platform): capture the Wayland PRIMARY highlight on Tab (M4)` commit (ADR-33).
 - **T-002** · 2026-09-22 · docs — Remove stale/superseded docs and dead code; introduce `TODO.md` and document it in `AGENTS.md`/`README.md`. **Closed:** 2026-09-22 · shipped in the same commit.

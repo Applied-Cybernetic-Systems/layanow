@@ -15,6 +15,8 @@
 
 use std::path::PathBuf;
 
+use serde::{Deserialize, Serialize};
+
 pub mod bundle;
 mod config;
 pub mod decider;
@@ -24,16 +26,23 @@ pub mod render;
 pub use decider::Decider;
 pub use error::ModelError;
 
-/// Weight precision of a checkpoint.
+/// Weight precision of a checkpoint graph (ADR-24/28/36/39).
 ///
-/// The bundle chooses which graph file to place at the spec's `graph` path;
-/// `quant` records the intended precision. See [`bundle::checkpoint_from_dir`].
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// Each [`bundle::CheckpointSpec`] offers one or more of these as
+/// [`bundle::GraphVariant`]s; the settings UI picks one and `Quant` selects
+/// which graph file is loaded. The default is [`Quant::Fp32`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
 pub enum Quant {
-    /// 8-bit quantized weights (smaller footprint; opt-in per ADR-28).
-    Int8,
-    /// 32-bit floating point weights (larger, highest fidelity).
+    /// 32-bit floating point weights (largest, highest fidelity); the default.
+    #[default]
     Fp32,
+    /// 16-bit floating point weights (half the size; software-emulated on CPUs
+    /// without native FP16, so slower — opt-in per ADR-39).
+    Fp16,
+    /// 8-bit quantized weights (smallest, fastest; opt-in, gated on the ADR-24
+    /// agreement bar — see ADR-28/36/39).
+    Int8,
 }
 
 /// Per-checkpoint calibration and length configuration, from `laya_config.json`.
