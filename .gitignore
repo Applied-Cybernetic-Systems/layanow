@@ -4,6 +4,3 @@ result
 models/
 *.onnx
 *.onnx.data
-
-# Local-only historical task log (migrated to CHANGELOG.md, not published).
-CHANGELOG.md
