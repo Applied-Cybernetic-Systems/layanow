@@ -61,7 +61,7 @@ cargo run -p layanow-app -- settings  # open the settings window
 
 ## Development environment (Nix)
 
-`flake.nix` pins the same nixpkgs revision as `~/projects/nix` and provides:
+`flake.nix` pins a nixpkgs revision for a reproducible toolchain and provides:
 
 - `cargo`, `rustc`, `clippy`, `rustfmt`, `rust-analyzer`
 - `onnxruntime` (used by `ort` via `ORT_DYLIB_PATH`)

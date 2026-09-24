@@ -154,9 +154,8 @@ APIs.
 
 ## ADR-22 — Repository
 **Decision:** Source lives at `github.com/Applied-Cybernetic-Systems/layanow`
-(**public**), with a local git repo at `~/projects/layassist`. It was originally
-`github.com/Uiyx/layanow`; the repository was transferred to the Applied
-Cybernetic Systems organization on 2026-09-22 and made public on 2026-09-23.
+(**public**). It was transferred to the Applied Cybernetic Systems organization
+on 2026-09-22 and made public on 2026-09-23.
 
 ## ADR-23 — MCQ → Laya rendering (A5)
 **Decision:** Map an MCQ as `ins` = question text, `crit` = letter-labelled
@@ -390,7 +389,7 @@ keeps running from the CLI.
 loop; `tray-icon`'s default Linux backend needs `libappindicator` + GTK and a
 GTK event loop, which would add a heavy dependency and a second loop. The
 `ksni` backend runs on its own thread and needs no GTK (verified: the resolved
-tree has no `gtk`/`libappindicator`). waybar provides the StatusNotifierWatcher.
+tree has no `gtk`/`libappindicator`). A StatusNotifier host provides the watcher.
 
 **Consequence:** `cargo-deny`'s `[graph] all-features` is turned off because it
 would enable both mutually-exclusive Linux backends and pull in the unused GTK

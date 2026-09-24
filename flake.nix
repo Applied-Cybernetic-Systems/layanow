@@ -1,8 +1,7 @@
 {
   description = "layanow — local multiple-choice assistant";
 
-  # Pinned to the same nixpkgs revision as the user's system flake
-  # (~/projects/nix/flake.lock) so the toolchain matches the host.
+  # Pinned nixpkgs revision for a reproducible toolchain.
   inputs.nixpkgs.url = "github:NixOS/nixpkgs/9dd5558b06dbdacbf635a3dd36dce1b1a7ee3a89";
 
   outputs =

@@ -38,10 +38,7 @@ wayland-client = { version = "0.31", features = ["system"] }
 libc = "0.2"
 # Read the Wayland PRIMARY selection without a window or clipboard round-trip
 # (ADR-5/ADR-13, `RESOLVERS.md`). The crate speaks `ext-data-control` /
-# `wlr-data-control` v2, which MangoWC/wlroots provide.
-# Read the Wayland PRIMARY selection without a window or clipboard round-trip
-# (ADR-5/ADR-13, `RESOLVERS.md`). The crate speaks `ext-data-control` /
-# `wlr-data-control` v2, which MangoWC/wlroots provide.
+# `wlr-data-control` v2, which wlroots compositors provide.
 wl-clipboard-rs = "0.9"
 # System tray (ADR-20/35): the pure-Rust `ksni` (StatusNotifierItem) backend
 # speaks D-Bus directly, so no GTK/main loop is needed. `default-features = false`
