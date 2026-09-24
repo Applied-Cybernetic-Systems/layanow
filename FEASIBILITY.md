@@ -53,7 +53,7 @@ Evidence:
 So exporting multilingual is essentially "run the provided script with a
 different `model_dir`", plus an int8 quantization pass and a parity check.
 
-**M1 result (confirmed, `tools/export/run.sh`):** the multilingual export works
+**Result (confirmed, `tools/export/run.sh`):** the multilingual export works
 with `transformers` 5.17 / torch 2.14 (CPU) and reaches `max |dlogits| = 8.6e-6`
 vs PyTorch. The only wrinkle is the unused `act_probs` branch, whose
 `value_info` breaks ONNX shape inference; pruning it (`prune_act_head.py`,
@@ -97,9 +97,9 @@ be heavier for a transparent overlay.
 
 | Risk | Mitigation |
 |---|---|
-| Port of Laya rendering/head diverges from reference | Golden tests vs `rl_common.py` / ONNX parity; M0/M2 |
-| int8 accuracy regression | Accuracy check in M1; fall back to fp32 multilingual |
-| Multilingual ONNX export quirks | M1 spike; configs are modernbert family |
+| Port of Laya rendering/head diverges from reference | Golden tests vs `rl_common.py` / ONNX parity |
+| int8 accuracy regression | Accuracy check; fall back to fp32 multilingual |
+| Multilingual ONNX export quirks | Export spike; configs are modernbert family |
 | AT-SPI point mapping under Wayland | Spike; PRIMARY-selection fallback |
 | `axuielement-rs`/`uiautomation` maturity | Pin versions, wrap behind `TextResolver` trait |
 | `ort`/system libonnxruntime mismatch | `load-dynamic` + `ORT_DYLIB_PATH` from nix; pin ORT version |

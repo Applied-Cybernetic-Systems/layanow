@@ -82,14 +82,14 @@ Chosen (ADR-23), closest to Laya's Jev-style training distribution:
   Context box supplies it as `{"context": <text>}` (ADR-40). Do not duplicate
   the question into `state`.
 
-**M1 evaluation (multilingual, 20 neutral self-made MCQs):** with a short
+**Evaluation (multilingual, 20 neutral self-made MCQs):** with a short
 passage in `state` the fp32 model was 8/8 correct; with empty `state`
 (state-less trivia) 5/12; with the question duplicated into `state` 1/12.
 So keep `state = {}` as the default and put any selected context into `state`
 — do not duplicate the question. Alternatives considered: text-as-label
 `{ans0: "", …}`, and duplicating the question into `state`.
 
-### Golden tests (M2)
+### Golden tests
 
 `render.rs` is a port, not a re-derivation: it must match `rl_common.py`
 byte-for-byte. `tools/golden/gen_render_fixtures.py` (dev-shell only) runs the
@@ -113,13 +113,13 @@ tools/golden/gen_render_fixtures.py \
 **Dynamic int8** (`onnxruntime.quantization.quantize_dynamic`) was the intended
 default: int8 weights, runtime-quantized activations, no calibration data,
 standard for transformer encoders. Keep the fp32 graph as a settings option and
-as the fallback if int8 regresses — **M1 found it does; see below**.
+as the fallback if int8 regresses — **it does; see below**.
 
 Acceptance: int8 vs fp32 top-1 agreement ≥ 99% and small JS/KL divergence on a
 sample of real inputs; if a labelled sample exists, top-1 accuracy within
 ~1–2 points of fp32.
 
-**M1 result (multilingual).** fp32↔PyTorch parity: `max |dlogits| = 8.6e-6`.
+**Result (multilingual).** fp32↔PyTorch parity: `max |dlogits| = 8.6e-6`.
 Dynamic int8 (default settings) vs fp32 top-1 agreement was **100% on
 context-bearing inputs but 50% on state-less inputs (70% overall)** — below the
 ≥ 99% bar. `per_channel=True` was much worse (27%); MatMul-only 73%. Peak RSS
@@ -218,6 +218,6 @@ struct Checkpoint {
 
 ## Evaluation
 
-No SkillsBuild/answer-bank coupling (ADR-12). For the M1 spike, evaluate on a
+No SkillsBuild/answer-bank coupling (ADR-12). For the export spike, evaluate on a
 small neutral, self-made MCQ sample (and/or the model's own reference parity
 check) to confirm int8 accuracy before offering it as an opt-in setting.

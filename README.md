@@ -7,7 +7,7 @@ which answer is correct, then shows a ranked list with probability colours.
 General-purpose ("any text"), Linux/Wayland first.
 
 ```
-hotkey ─▶ egui overlay ─▶ drag over the question, then each answer ─▶ Enter
+hotkey ─▶ egui overlay ─▶ highlight the question, then each answer, Tab ─▶ Enter
                                                                     │
                                           Laya (ONNX Runtime, fp32) ◀┘
                                                                     │
@@ -16,32 +16,25 @@ hotkey ─▶ egui overlay ─▶ drag over the question, then each answer ─�
 
 ## Status
 
-M0–M2 complete: the `layanow-model` crate acquires/verifies the ONNX bundle,
-loads a checkpoint through `ort`, ports Laya's rendering/calibration, and
-replays committed golden fixtures against the `rl_common.py` reference.
+Linux/Wayland, working end to end:
 
-M4 in progress: the Wayland **PRIMARY selection** backend is wired (ADR-33) —
-highlight text natively and press `Tab` to add it as the question, repeat for
-each answer, then `Enter` to decide. Typing an item into the field and pressing
-`Tab` still works as a fallback. It reads PRIMARY (the highlight buffer) only
-and never touches the clipboard (ADR-5). The X11 and Windows/macOS backends
-remain.
+- **Resident applet** that starts hidden; `layanow toggle|show|hide|quit` and a
+  tray icon (Toggle / Settings… / Quit) control it (ADR-34/35).
+- **Native PRIMARY capture** — highlight text and press `Tab`; typed text is a
+  fallback. The clipboard is never touched (ADR-5/33).
+- **Optional Context** (the model's `state`): type/paste, pick files with the
+  native picker, select files in a file manager (their `file://` URIs are read),
+  or reuse a saved context template (ADR-40).
+- **Local Laya** via ONNX Runtime, CPU-only, with a per-checkpoint **precision**
+  (fp32/fp16, plus English int8 behind a lower-accuracy warning — ADR-39).
+- A standalone **settings window** (`layanow settings`) for checkpoint,
+  precision, low-confidence threshold, model residency, and probability-bar
+  colours; it writes `~/.config/layanow/config.toml` and applies live (ADR-38).
+- A **click-through** overlay that only grabs the keyboard while shown, with
+  ranked results and probability colours (ADR-14/25/31).
 
-M5 in progress: the applet is now **resident** and starts **hidden** (ADR-34).
-Run it once, then a compositor bind (or `layanow toggle`) shows the overlay;
-`Esc` hides it and `layanow quit` stops the applet. A **tray icon** (ADR-35)
-offers Toggle/Quit and a left click toggles. A standalone **settings window**
-(`layanow settings`, or the tray's **Settings…**) chooses the checkpoint, its
-**precision** (fp32/fp16, plus English int8 behind a lower-accuracy warning —
-ADR-39), the low-confidence threshold, hot vs on-demand model residency, and the
-**probability-bar colours**; it writes `~/.config/layanow/config.toml` and the
-applet applies the change live (ADR-38). The overlay also has an optional
-**Context** box (ADR-40) — the model's `state`: type/paste evidence, click
-**Files…** for the native picker, select files in a file manager (their
-`file://` URIs are read), or pick a saved **context template**; it is what makes
-document/ticket questions reliable. The
-control channel is a cross-platform local socket (Unix domain socket / Windows
-named pipe) that also enforces a single instance.
+Not yet: X11 and Windows/macOS selection backends, accessibility and OCR
+resolvers, and multi-answer support.
 
 ```sh
 nix develop
@@ -64,7 +57,7 @@ cargo run -p layanow-app -- settings  # open the settings window
 | `RESOLVERS.md` | `TextResolver` trait and per-platform backends |
 | `LAYA.md` | ONNX contract, checkpoint export, rendering port, calibration |
 | `OPEN-QUESTIONS.md` | Every decision still needing clarification |
-| GitHub Issues | Living task tracker (`area/*` labels, `M0`–`M10` milestones; historical `T-###` log in `CHANGELOG.md`) |
+| GitHub Issues | Living task tracker (`area/*` labels, `M0`–`M10` milestones) |
 
 ## Development environment (Nix)
 
@@ -93,8 +86,8 @@ cargo run -p layanow-app          # starts the tray applet, loads the model
 # hotkey opens the overlay
 ```
 
-Hotkey: on Wayland/MangoWC a compositor bind runs `layanow toggle` (Wayland
-has no app-level global hotkeys). On Windows/macOS the applet registers it.
+Hotkey: on Wayland a compositor bind runs `layanow toggle` (Wayland has no
+app-level global hotkeys). On Windows/macOS the applet registers it.
 
 ## Text capture (highlight buffer)
 
@@ -115,7 +108,7 @@ The standalone probe is
 `LAYANOW_LOG=layanow=debug` (or the `LAYANOW_DEBUG=1` shorthand) to log capture
 outcomes (lengths only, never the text).
 
-## Model smoke test (M0)
+## Model smoke test
 
 The `layanow-model` crate loads a Laya ONNX bundle and runs one `choice`
 decision. The bundle (~1.7 GB, fp32 English checkpoint) is **not** bundled: on

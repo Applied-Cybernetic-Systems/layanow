@@ -41,7 +41,7 @@ Docs: `PLAN.md`, `DECISIONS.md` (ADRs), `FEASIBILITY.md`, `RESOLVERS.md`,
 6. **No SkillsBuild coupling** and no bundled answer bank (ADR-12).
 7. Default resource profile: **hot, fp32 (English), CPU-only**, documented soft
    budget **≤ 3 GB** (ADR-11/36). No runtime enforcement. Dynamic int8 is an
-   opt-in setting (ADR-36, T-114).
+   opt-in setting (ADR-36/39).
 8. `unsafe` code only in `layanow-platform`, isolated and documented.
 
 ## Work tracking (GitHub Issues)
@@ -56,7 +56,6 @@ Work is tracked in the **GitHub issue tracker**
 - When you start an issue, assign yourself / comment; when you finish it, close
   it with a short outcome and the commit, as `**Closed:**` used to.
 - Record anything you notice as a new issue instead of acting silently.
-- Completed work (the old closed log) is archived in `CHANGELOG.md`.
 
 ## Quality gate (must pass before "done")
 

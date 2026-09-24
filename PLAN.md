@@ -112,14 +112,17 @@ model's `state`, which is what makes document/ticket questions reliable.
 
 | # | Deliverable |
 |---|---|
-| M0 | Rust workspace + flake + CI quality gate + `ort` smoke test on `receptron/laya-onnx` |
-| M1 | **Export spike** (done): multilingual → ONNX (parity 8.6e-6) + int8; int8 missed ADR-24's bar → multilingual defaults to fp32; RAM fp32 ≈2.1 GB / int8 ≈0.7 GB; A5/A7 settled (ADR-28) |
-| M2 | **`layanow-model`** (done): tokenizer + rendering + calibration port; golden tests vs `rl_common.py` (ADR-29) |
-| M3 | **Click-through overlay + item model + results panel** (done): `Session` model, capture stub (replaced by the M4 selection backend), inference worker, results panel, and a Wayland `wlr-layer-shell` overlay rendering egui via EGL/`egui_glow` (ADR-30/31) |
-| M4 | **Linux selection backends** (in progress): Wayland PRIMARY (`wl-clipboard-rs`) with `Tab`-commit capture done (ADR-33); X11 (`x11rb`) pending |
-| M5 | **Control socket + hidden-by-default overlay + `layanow toggle` + tray icon + standalone settings window done (ADR-34/35/38)**; per-checkpoint precision fp32/fp16 (+ English int8 behind a lower-accuracy warning, ADR-39) and probability-colour settings (T-114/T-116) done |
+| M0 | Rust workspace + Nix flake + CI quality gate + `ort` smoke test |
+| M1 | ONNX export spike: multilingual → ONNX + int8; fp32 default (ADR-28) |
+| M2 | `layanow-model`: tokenizer, rendering/calibration port, golden tests (ADR-29) |
+| M3 | Click-through layer-shell overlay, item model, inference worker, results panel (ADR-30/31) |
+| M4 | Linux selection backends: Wayland PRIMARY (`Tab`-commit) done (ADR-33); X11 pending |
+| M5 | Resident applet, control socket, tray, settings window, precision + context (ADR-34/35/38/39/40) |
 | M6 | Polish: no-clipboard-clobber guarantees, error popup, history, docs |
-| M7 | Windows selection backend · M8 macOS selection backend · M9 accessibility resolver · M10 OCR |
+| M7 | Windows selection backend |
+| M8 | macOS selection backend |
+| M9 | Accessibility resolver |
+| M10 | OCR resolver |
 
 ## Open questions
 

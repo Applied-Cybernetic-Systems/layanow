@@ -46,8 +46,8 @@ copy is opt-in.
 **Decision:** Register the hotkey natively where the OS allows; on Wayland use a
 compositor bind.
 **Why:** Wayland has no app-level global-hotkey protocol, and the
-GlobalShortcuts portal is not implemented by wlroots/`xdpw` (MangoWC).
-**How:** Linux/Wayland → a `mango` bind runs `layanow toggle`. Windows/macOS
+GlobalShortcuts portal is not implemented by wlroots/`xdpw`.
+**How:** Linux/Wayland → a compositor bind runs `layanow toggle`. Windows/macOS
 (later) → the applet registers via `global-hotkey`.
 
 ## ADR-7 — Model selection is a settings toggle
@@ -138,7 +138,7 @@ popup from the applet rather than failing silently.
 ## ADR-19 — Hotkey is user-managed
 **Decision:** The applet documents the hotkey and the `layanow toggle`
 command, but does **not** modify the compositor config. The user wires the bind
-(e.g. in `~/projects/nix` mango config).
+(e.g. in the compositor config).
 
 ## ADR-20 — Tray `tray-icon`; overlay windowing is per-platform
 **Decision:** Use `tray-icon` (cross-platform: Windows/macOS/Linux SNI). The
@@ -164,7 +164,7 @@ answers (`{"A": ans0, "B": ans1, …}`), `state` = empty `{}` by default (or the
 question / any extra context the user selected).
 **Why:** Closest to Laya's Jev-style training distribution (state = document,
 `ins` = question, `crit` = labelled options). Keep rendering behind config and
-confirm by evaluation in M1 — do not hardcode beyond the default.
+confirm by evaluation — do not hardcode beyond the default.
 
 ## ADR-24 — Quantization: dynamic int8 (A7)
 **Decision:** Default to **dynamic int8**
@@ -196,14 +196,14 @@ target app.
 - **C1:** manual checkpoint toggle in v1; no auto language router.
 - **C2:** confidence threshold default `0.5`; flag low-confidence, never refuse.
 - **C3:** ignore the `act_probs` head in v1.
-- **C4:** cap `intra_op_num_threads` to 2–4; tune in M1.
+- **C4:** cap `intra_op_num_threads` to 2–4; tune empirically.
 - **C5:** CPU-only now; GPU is a future opt-in.
 - **C6:** multi-answer deferred; later, mark options above a probability
   threshold.
-- **C7:** the M1 spike includes exporting `multilingual` to ONNX + int8 and
+- **C7:** the export spike includes exporting `multilingual` to ONNX + int8 and
   verifying parity/accuracy.
 
-## ADR-28 — M1 results: multilingual ONNX + quantization (A5/A7)
+## ADR-28 — Export-spike results: multilingual ONNX + quantization (A5/A7)
 **Decision:** Ship the multilingual checkpoint (`convaiinnovations/laya` →
 `multilingual/`, encoder `jhu-clsp/mmBERT-base`) as **fp32 ONNX**; dynamic int8
 stays an opt-in setting. The v1 graph is **logits-only** (the unused `act_probs`
@@ -241,27 +241,27 @@ ADR-9 forbids Python at runtime and the bundle is far too large to commit. A
 generated fixture pins the reference behaviour in a few tens of KiB.
 **Consequence:** An intentional rendering/calibration change requires
 regenerating and reviewing the fixture; an accidental divergence fails
-`cargo test`. The generator is a dev-shell tool only (it needs the M1 export or
+`cargo test`. The generator is a dev-shell tool only (it needs a local export or
 a cached tokenizer), never a runtime dependency.
 
-## ADR-30 — M3 overlay: eframe/glow, mouse passthrough, manual-capture stub
+## ADR-30 — Overlay: eframe/glow, mouse passthrough, manual-capture stub
 **Decision:** The overlay is an `eframe`/`egui` window (ADR-10) using the
 `glow` (OpenGL) renderer, pinned to `eframe` 0.32 — the newest release that
 still honours the workspace MSRV of 1.85 (E8); 0.36 requires Rust 1.95. The
 window is transparent, undecorated, always-on-top, fullscreen, and
 `MousePassthrough` is **on while capturing** (ADR-14) and **off only while
 results are shown**, so the dismissing click can be seen (ADR-15). Until the
-platform selection resolver lands (M4), a single-line text field auto-focuses
+platform selection resolver lands, a single-line text field auto-focuses
 and `Tab` commits its contents through `StubResolver` — the same path a real
 auto-captured selection takes — so the capture/decide/results flow is testable
 without the OS selection buffer. `Enter` decides, `Esc` cancels, a click
 dismisses.
-**Why:** This delivers the M3 item model, results panel, and inference wiring
+**Why:** This delivers the item model, results panel, and inference wiring
 while respecting the click-through invariant. `glow` avoids the `wgpu` tree.
 **Consequence / open:** true Wayland layer-shell *keyboard interactivity* and
 click-through (ADR-26) are not yet wired — eframe's winit window relies on X11
 focus for keys — so the overlay is compile- and unit-tested but not yet
-visually verified; that, and removing the `Tab`-capture stub, is M4 work. The
+visually verified; that, and removing the `Tab`-capture stub, is follow-up work. The
 "take the pointer to dismiss results" interpretation of ADR-15 is provisional.
 
 ## ADR-31 — Wayland overlay is a wlr-layer-shell host (supersedes ADR-30's window)
@@ -289,8 +289,8 @@ libwayland pointers (the pure-Rust backend exposes none); the dev shell adds
 libraries load at runtime.
 **Consequence:** Linux/Wayland only for now; `overlay::run` returns
 `OverlayError::Unsupported` elsewhere, and the Wayland deps are `cfg`-gated to
-Linux. Verified to map a 1920x1200 layer surface and initialise GL on MangoWC;
-the `Tab`-to-capture stub still stands in until the M4 selection backends.
+Linux. Verified to map a 1920x1200 layer surface and initialise GL;
+the `Tab`-to-capture stub still stands in until the selection backends.
 
 ## ADR-32 — Overlay theme: gruvbox medium contrast, shadowed bright text
 **Decision:** The overlay uses the gruvbox "medium" contrast palette
@@ -308,7 +308,7 @@ option, so `theme::shadowed_text` lays the galley out once and paints it twice
 mirrors the same gruvbox anchors and stays `egui`-free. Palette changes are a
 one-file edit.
 
-## ADR-33 — M4 capture: `Tab` commits the highlight or a typed item
+## ADR-33 — Capture: `Tab` commits the highlight or a typed item
 **Decision:** The overlay captures items two ways, both committed with **`Tab`**:
 (a) the current Wayland **PRIMARY** selection — the highlight buffer, never the
 regular clipboard — read once through `layanow-platform::selection` (a
@@ -327,7 +327,7 @@ clobbers what the user copied (ADR-5), and resolving on demand avoids the
 infinite "current selection" re-capture a drain loop would produce. Keeping the
 typed field means capture still works when nothing is selectable (and keeps the
 flow testable headlessly).
-**Consequence:** The M3 `StubResolver` indirection is removed — the overlay
+**Consequence:** The earlier `StubResolver` indirection is removed — the overlay
 builds a `Selection` for typed text directly and uses the platform resolver for
 highlights. The platform selection resolver is wired in `main.rs`. True
 auto-capture (observing selection changes through the overlay surface's own
@@ -335,7 +335,7 @@ auto-capture (observing selection changes through the overlay surface's own
 blocking pipe read happens on the UI thread when `Tab` is pressed; moving it to
 a worker is deferred until a backend can stall.
 
-## ADR-34 — M5 control channel: cross-platform local socket; hidden-by-default overlay
+## ADR-34 — Control channel: cross-platform local socket; hidden-by-default overlay
 **Decision:** The resident applet is controlled through a small local-socket
 protocol. `layanow` with no arguments runs the applet;
 `layanow toggle|show|hide|quit` connect to it and send one newline-terminated
@@ -409,7 +409,7 @@ in ADR-11 and ADR-24 for English (multilingual was already fp32 per ADR-28).
 **Why:** fp32 is strictly the more accurate graph — quantization only adds error
 (T-120). int8 is the resource win, but fp32 already fits ADR-11's ≤ 3 GB soft
 budget (≈ 2.1 GB vs ≈ 0.7 GB), so there is no budget pressure to accept an
-unverified accuracy loss. The M1 multilingual result (int8 vs fp32 top-1
+unverified accuracy loss. The multilingual export-spike result (int8 vs fp32 top-1
 agreement 70% overall) shows int8 can change decisions; the English case has not
 been measured (T-121).
 **Consequence:** `AGENTS.md`/`PLAN.md`/`OPEN-QUESTIONS.md`/`LAYA.md` no longer
@@ -488,7 +488,7 @@ precision_parity`, `LAYANOW_ALLOW_MODEL_DOWNLOAD=1`):
   language tried (English, French, Spanish, German, Bulgarian, Japanese), so
   the graph is unusable and is **not registered**.
 Weight-only int8 (`MatMulNBits`) is used instead of ADR-24's
-`quantize_dynamic`, which both the M1 spike and the inferenceprince results
+`quantize_dynamic`, which both the export spike and the inferenceprince results
 show destroys this model. fp16 is kept despite ADR-37's earlier rejection
 because it is numerically clean; it is slower on CPUs without native FP16,
 which the settings label says.
@@ -537,4 +537,4 @@ passage/ticket, not a whole document — chunked retrieval (T-181) remains the
 long-term answer for large corpora. The native picker is verified on Linux
 (xdg-desktop-portal); on Windows/macOS it will need a parent window handle, and
 on macOS the panel must run on the main run loop, once those overlay hosts land
-(M7/M8, T-182).
+(issue T-182).

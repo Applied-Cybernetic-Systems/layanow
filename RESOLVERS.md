@@ -39,12 +39,12 @@ the selection buffer; never overwrite the clipboard.
 ### Linux
 - **Wayland:** read the PRIMARY selection via `wl-clipboard-rs` (`wl-paste -p`
   equivalent). The crate uses `ext-data-control` / `wlr-data-control` v2, which
-  wlroots compositors (MangoWC) provide. PRIMARY is separate from the clipboard,
-  so nothing is clobbered. **Implemented (M4).** If an app does not publish
+  wlroots compositors provide. PRIMARY is separate from the clipboard,
+  so nothing is clobbered. **Implemented.** If an app does not publish
   PRIMARY, optionally fall back to a simulated copy (`wtype`) **with clipboard
   save + restore** (opt-in).
 - **X11:** read the PRIMARY selection directly (`x11rb` / `x11-clipboard`).
-  Not yet implemented (M4).
+  Not yet implemented.
 
 A resolver with no selection returns `Ok(None)`, which the overlay reports as an
 empty selection; a genuine platform failure returns `ResolveError::Platform`.
