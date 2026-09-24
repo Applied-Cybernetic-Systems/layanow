@@ -78,7 +78,46 @@ cargo build
 
 `.envrc` is provided for direnv.
 
-## Quickstart (planned)
+## Building without Nix
+
+`rust-toolchain.toml` pins the toolchain for [rustup](https://rustup.rs); install
+it, then the native dependencies below. `ort` uses its `load-dynamic` feature, so
+the build does not link ONNX Runtime — you supply the shared library at runtime
+via `ORT_DYLIB_PATH`.
+
+- **Build:** `pkg-config`, `cmake`, a C toolchain, OpenSSL headers, the
+  Wayland/EGL/GL stack (`wayland`, `wayland-protocols`, `libxkbcommon`,
+  `libEGL`, `libGL`), the X11 stack (`libX11`, `libXcursor`, `libXi`,
+  `libXrandr`, `libXinerama`), and **ONNX Runtime 1.24.x**.
+- **Runtime:** `libonnxruntime`, the Wayland/EGL/GL libraries, and `libdbus`
+  (for the native file picker). The overlay and PRIMARY capture need a
+  wlroots-style compositor with `wlr-layer-shell` and `ext-data-control`.
+
+Debian/Ubuntu (names vary by distro):
+
+```sh
+sudo apt install build-essential pkg-config cmake libssl-dev \
+  libwayland-dev wayland-protocols libxkbcommon-dev libegl-dev libgl-dev \
+  libx11-dev libxcursor-dev libxi-dev libxrandr-dev libxinerama-dev \
+  libdbus-1-dev
+```
+
+Install ONNX Runtime 1.24.x from
+<https://github.com/microsoft/onnxruntime/releases> (or your distro), then:
+
+```sh
+export ORT_DYLIB_PATH=/path/to/libonnxruntime.so
+cargo build --release -p layanow-app
+# first run: allow the one-time model download (~1.7 GB, English fp32)
+LAYANOW_ALLOW_MODEL_DOWNLOAD=1 ./target/release/layanow
+```
+
+The Wayland/EGL/GL libraries and `libdbus` are opened at runtime, so they must be
+on the loader path (set `LD_LIBRARY_PATH` if they are not in the default
+locations). The overlay host is Linux/Wayland-only today; other platforms build
+but have no overlay.
+
+## Quickstart
 
 ```sh
 nix develop
