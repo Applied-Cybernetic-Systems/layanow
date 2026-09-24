@@ -101,6 +101,10 @@ native selection (click-through overlay) ─▶ TextResolver.resolve_current_sel
 5. A click dismisses the results and returns to the live screen (ADR-15).
    Low confidence flagged.
 
+The overlay's **Context** box (ADR-40) is optional: type/paste evidence, select a
+file in the file manager (`file://`), or pick a saved template; it becomes the
+model's `state`, which is what makes document/ticket questions reliable.
+
 > No freeze (ADR-25); the pointer is never captured (ADR-14). `Esc` hides the
 > overlay (ADR-34).
 

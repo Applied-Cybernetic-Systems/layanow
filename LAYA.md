@@ -66,8 +66,9 @@ Sequence layout:
   `<eos>`/`<mask>`/`<pad>` (`tokenizers` does not parse that file, so
   `layanow-model` reads it and falls back to the `[CLS]` spellings).
 
-For our MCQ use: `state = {}` (empty, per ADR-23) unless the user supplies
-extra context, `q["ins"] = question`, `crit = {answer_label: answer_text}`.
+For our MCQ use: `state` is the optional context the user supplies (the overlay
+Context box, ADR-40), serialized as `{"context": <text>}` (empty → `{}`);
+`q["ins"] = question`, `crit = {answer_label: answer_text}`.
 
 ### Rendering mapping (A5 — decided)
 
@@ -77,8 +78,9 @@ Chosen (ADR-23), closest to Laya's Jev-style training distribution:
 - `q["ins"]` = the question text.
 - `q["crit"]` = letter-labelled answers: `{"A": ans0, "B": ans1, …}` →
   `"A: <answer>"`.
-- `state` = empty `{}` by default; or the question / any extra context the user
-  selected.
+- `state` = the optional context (empty `{}` by default, ADR-23); the overlay
+  Context box supplies it as `{"context": <text>}` (ADR-40). Do not duplicate
+  the question into `state`.
 
 **M1 evaluation (multilingual, 20 neutral self-made MCQs):** with a short
 passage in `state` the fp32 model was 8/8 correct; with empty `state`

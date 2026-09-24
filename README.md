@@ -35,9 +35,12 @@ offers Toggle/Quit and a left click toggles. A standalone **settings window**
 **precision** (fp32/fp16, plus English int8 behind a lower-accuracy warning —
 ADR-39), the low-confidence threshold, hot vs on-demand model residency, and the
 **probability-bar colours**; it writes `~/.config/layanow/config.toml` and the
-applet applies the change live (ADR-38). The control channel is a cross-platform
-local socket (Unix domain socket / Windows named pipe) that also enforces a
-single instance.
+applet applies the change live (ADR-38). The overlay also has an optional
+**Context** box (ADR-40) — the model's `state`: type/paste evidence, select
+files in a file manager (their `file://` URIs are read), or pick a saved
+**context template**; it is what makes document/ticket questions reliable. The
+control channel is a cross-platform local socket (Unix domain socket / Windows
+named pipe) that also enforces a single instance.
 
 ```sh
 nix develop
@@ -46,6 +49,7 @@ cargo run -p layanow-app            # resident applet; overlay starts hidden
 cargo run -p layanow-app -- toggle  # show/hide · also: show, hide, quit
 cargo run -p layanow-app -- settings  # open the settings window
 # highlight text (or type), Tab to add · Enter to decide · Esc: hide
+# optional: put evidence in the Context box (type/paste, select a file, or a saved template)
 ```
 
 ## Documentation

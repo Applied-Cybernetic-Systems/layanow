@@ -12,7 +12,7 @@
 
 use eframe::egui;
 
-use crate::settings::{Settings, UnloadPolicy};
+use crate::settings::{NamedContext, Settings, UnloadPolicy};
 use layanow_model::Quant;
 use layanow_model::bundle;
 use layanow_platform::control::{self, Command, ControlError};
@@ -37,8 +37,8 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
             .with_title("layanow settings")
-            .with_inner_size([480.0, 470.0])
-            .with_min_inner_size([400.0, 360.0]),
+            .with_inner_size([520.0, 620.0])
+            .with_min_inner_size([420.0, 400.0]),
         ..Default::default()
     };
     let result = eframe::run_native(
@@ -58,12 +58,22 @@ struct SettingsApp {
     applied: Settings,
     /// A short user-facing status line.
     status: Option<String>,
+    /// Name for a new context template (ADR-40).
+    new_context_name: String,
+    /// Text for a new context template (ADR-40).
+    new_context_text: String,
 }
 
 impl Default for SettingsApp {
     fn default() -> Self {
         let settings = Settings::load();
-        Self { applied: settings.clone(), settings, status: None }
+        Self {
+            applied: settings.clone(),
+            settings,
+            status: None,
+            new_context_name: String::new(),
+            new_context_text: String::new(),
+        }
     }
 }
 
@@ -80,106 +90,152 @@ impl SettingsApp {
             Err(error) => self.status = Some(format!("Could not save settings: {error}")),
         }
     }
+
+    /// The named-context editor (ADR-40): list, delete and add templates.
+    fn context_templates(&mut self, ui: &mut egui::Ui) {
+        ui.collapsing("Context templates", |ui| {
+            let mut remove = None;
+            for (index, template) in self.settings.contexts.iter().enumerate() {
+                ui.horizontal(|ui| {
+                    ui.label(&template.name);
+                    if ui.small_button("delete").clicked() {
+                        remove = Some(index);
+                    }
+                });
+            }
+            if let Some(index) = remove {
+                self.settings.contexts.remove(index);
+            }
+            ui.add_space(4.0);
+            ui.add(
+                egui::TextEdit::singleline(&mut self.new_context_name)
+                    .hint_text("name")
+                    .desired_width(200.0),
+            );
+            ui.add(
+                egui::TextEdit::multiline(&mut self.new_context_text)
+                    .hint_text("context text")
+                    .desired_rows(3)
+                    .desired_width(320.0),
+            );
+            let can_add = !self.new_context_name.trim().is_empty()
+                && !self.new_context_text.trim().is_empty();
+            if ui.add_enabled(can_add, egui::Button::new("Add template")).clicked() {
+                self.settings.contexts.push(NamedContext {
+                    name: self.new_context_name.trim().to_string(),
+                    text: self.new_context_text.clone(),
+                });
+                self.new_context_name.clear();
+                self.new_context_text.clear();
+            }
+            ui.small("Select a template from the overlay's Context dropdown.");
+        });
+    }
 }
 
 impl eframe::App for SettingsApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         egui::CentralPanel::default().show(ctx, |ui| {
-            ui.heading("layanow");
-            ui.add_space(8.0);
+            egui::ScrollArea::vertical().show(ui, |ui| {
+                ui.heading("layanow");
+                ui.add_space(8.0);
 
-            ui.label("Checkpoint");
-            egui::ComboBox::from_id_salt("checkpoint")
-                .width(300.0)
-                .selected_text(checkpoint_label(&self.settings.checkpoint))
-                .show_ui(ui, |ui| {
-                    for spec in bundle::CHECKPOINTS {
-                        ui.selectable_value(
-                            &mut self.settings.checkpoint,
-                            spec.id.to_string(),
-                            spec.name,
-                        );
-                    }
-                });
-            let spec = bundle::checkpoint(&self.settings.checkpoint);
-            if let Some(spec) = spec {
-                ui.small(format!("{} graph variant(s) available", spec.variants.len()));
-                // A checkpoint change may drop the currently selected precision;
-                // fall back to its first (fp32) variant.
-                if bundle::variant(spec, self.settings.quant).is_none() {
-                    if let Some(first) = spec.variants.first() {
-                        self.settings.quant = first.quant;
-                    }
-                }
-            } else {
-                ui.small(format!("unknown checkpoint {:?}", self.settings.checkpoint));
-            }
-
-            ui.add_space(10.0);
-            ui.label("Precision");
-            egui::ComboBox::from_id_salt("quant")
-                .width(300.0)
-                .selected_text(quant_label(self.settings.quant))
-                .show_ui(ui, |ui| {
-                    if let Some(spec) = spec {
-                        for variant in spec.variants {
+                ui.label("Checkpoint");
+                egui::ComboBox::from_id_salt("checkpoint")
+                    .width(300.0)
+                    .selected_text(checkpoint_label(&self.settings.checkpoint))
+                    .show_ui(ui, |ui| {
+                        for spec in bundle::CHECKPOINTS {
                             ui.selectable_value(
-                                &mut self.settings.quant,
-                                variant.quant,
-                                quant_label(variant.quant),
+                                &mut self.settings.checkpoint,
+                                spec.id.to_string(),
+                                spec.name,
                             );
                         }
+                    });
+                let spec = bundle::checkpoint(&self.settings.checkpoint);
+                if let Some(spec) = spec {
+                    ui.small(format!("{} graph variant(s) available", spec.variants.len()));
+                    // A checkpoint change may drop the currently selected precision;
+                    // fall back to its first (fp32) variant.
+                    if bundle::variant(spec, self.settings.quant).is_none() {
+                        if let Some(first) = spec.variants.first() {
+                            self.settings.quant = first.quant;
+                        }
                     }
-                });
-            ui.small(
-                "fp32: highest fidelity · fp16: smaller, slower on CPUs without native FP16 · \
+                } else {
+                    ui.small(format!("unknown checkpoint {:?}", self.settings.checkpoint));
+                }
+
+                ui.add_space(10.0);
+                ui.label("Precision");
+                egui::ComboBox::from_id_salt("quant")
+                    .width(300.0)
+                    .selected_text(quant_label(self.settings.quant))
+                    .show_ui(ui, |ui| {
+                        if let Some(spec) = spec {
+                            for variant in spec.variants {
+                                ui.selectable_value(
+                                    &mut self.settings.quant,
+                                    variant.quant,
+                                    quant_label(variant.quant),
+                                );
+                            }
+                        }
+                    });
+                ui.small(
+                    "fp32: highest fidelity · fp16: smaller, slower on CPUs without native FP16 · \
                  int8: smallest and fastest, opt-in (ADR-24/39)",
-            );
-            if self.settings.quant == Quant::Int8 {
-                ui.colored_label(
-                    crate::theme::YELLOW,
-                    "⚠ int8 can change answers: 19/20 top-1 agreement with fp32 in our \
-                     evaluation (ADR-39).",
                 );
-            }
+                if self.settings.quant == Quant::Int8 {
+                    ui.colored_label(
+                        crate::theme::YELLOW,
+                        "⚠ int8 can change answers: 19/20 top-1 agreement with fp32 in our \
+                     evaluation (ADR-39).",
+                    );
+                }
 
-            ui.add_space(10.0);
-            ui.add(
-                egui::Slider::new(&mut self.settings.confidence_threshold, 0.0..=1.0)
-                    .text("low-confidence threshold"),
-            )
-            .on_hover_text("Below this, the decision is flagged — it is never refused.");
+                ui.add_space(10.0);
+                ui.add(
+                    egui::Slider::new(&mut self.settings.confidence_threshold, 0.0..=1.0)
+                        .text("low-confidence threshold"),
+                )
+                .on_hover_text("Below this, the decision is flagged — it is never refused.");
 
-            ui.add_space(10.0);
-            ui.label("Model residency");
-            ui.radio_value(
-                &mut self.settings.unload,
-                UnloadPolicy::Hot,
-                "Hot — keep the model ready (instant answers, ~2 GB idle)",
-            );
-            ui.radio_value(
-                &mut self.settings.unload,
-                UnloadPolicy::OnDemand,
-                "On demand — unload after each decision (slower next answer)",
-            );
+                ui.add_space(10.0);
+                ui.label("Model residency");
+                ui.radio_value(
+                    &mut self.settings.unload,
+                    UnloadPolicy::Hot,
+                    "Hot — keep the model ready (instant answers, ~2 GB idle)",
+                );
+                ui.radio_value(
+                    &mut self.settings.unload,
+                    UnloadPolicy::OnDemand,
+                    "On demand — unload after each decision (slower next answer)",
+                );
 
-            ui.add_space(10.0);
-            ui.label("Probability colours");
-            ui.horizontal(|ui| {
-                ui.label("low");
-                ui.color_edit_button_srgb(&mut self.settings.palette.low);
-                ui.label("mid");
-                ui.color_edit_button_srgb(&mut self.settings.palette.mid);
-                ui.label("high");
-                ui.color_edit_button_srgb(&mut self.settings.palette.high);
+                ui.add_space(10.0);
+                ui.label("Probability colours");
+                ui.horizontal(|ui| {
+                    ui.label("low");
+                    ui.color_edit_button_srgb(&mut self.settings.palette.low);
+                    ui.label("mid");
+                    ui.color_edit_button_srgb(&mut self.settings.palette.mid);
+                    ui.label("high");
+                    ui.color_edit_button_srgb(&mut self.settings.palette.high);
+                });
+                ui.small("The bar colour lerps low → mid → high as the probability rises.");
+
+                ui.add_space(10.0);
+                self.context_templates(ui);
+
+                ui.add_space(12.0);
+                if let Some(status) = &self.status {
+                    ui.label(status);
+                }
+                ui.small(format!("Saved to {}", Settings::path().display()));
             });
-            ui.small("The bar colour lerps low → mid → high as the probability rises.");
-
-            ui.add_space(12.0);
-            if let Some(status) = &self.status {
-                ui.label(status);
-            }
-            ui.small(format!("Saved to {}", Settings::path().display()));
         });
 
         if self.settings != self.applied {

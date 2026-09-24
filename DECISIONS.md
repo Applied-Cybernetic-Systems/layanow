@@ -499,3 +499,36 @@ multilingual int8 is not offered. A checkpoint whose requested precision is
 absent (e.g. multilingual + int8 in a hand-edited config) falls back to fp32
 with a log warning. `layanow-model --example precision_parity` records the
 evidence and must be rerun before registering a new precision variant.
+
+## ADR-40 — Optional context (state) capture, file selection and named templates
+**Decision:** The overlay gains an optional **Context** box, separate from the
+`Tab` question/answer capture (Option A). It is the model's `state`:
+- the user types/pastes evidence into it;
+- a `file://` URI from a file manager (or an existing absolute path) in the
+  selection is read into it — a file selection is never treated as a question or
+  answer;
+- a dropdown selects a saved, named **context template**, and **Save…** stores
+  the current context under a name;
+- templates persist in `~/.config/layanow/config.toml` as
+  `contexts = [{ name, text }]` and are also managed in the settings window.
+The context is sent as the `state` JSON `{"context": <text>}` (blank → `{}`),
+with the question still `ins` and the answers `crit` (ADR-23). Because the
+context box, dropdown and Save button need the pointer, the capturing panel is
+now pointer-interactive too (the panel already was in the results phase); the
+area outside the panel stays click-through (amends ADR-14/25 and T-166).
+**Why:** The app's intended use is deciding from *provided* evidence, and the
+model is far stronger with it — the same question went from 37% (wrong) to 92%
+(correct) with a passage in `state`, and a bare string `state` measured worse
+than the `{"context": …}` object. A separate, optional slot keeps today's fast
+question→answers flow unchanged (an empty Context box is simply skipped) while
+giving reading-comprehension/ticket use cases a home. Reading a selected file is
+the local, network-free way to bring in evidence; named templates make recurring
+contexts (a ticket queue, a policy) reusable. This replaces the earlier idea of
+retrieval/search (Exa etc.), which would violate the no-runtime-network
+invariant (AGENTS.md #4).
+**Consequence:** `Settings` gains `contexts`; `Request::Decide` and
+`DecisionEngine::decide_choice` carry the context; `render::context_state` wraps
+it. `Esc`/hiding clears the context (templates persist). Large files are
+capped and the renderer truncates `state` to the token budget, so this suits a
+passage/ticket, not a whole document — chunked retrieval (T-181) remains the
+long-term answer for large corpora.

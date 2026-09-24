@@ -22,6 +22,15 @@ pub enum UnloadPolicy {
     OnDemand,
 }
 
+/// A named, reusable context (the Laya `state`) template (ADR-40).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct NamedContext {
+    /// The template's name (unique within [`Settings::contexts`]).
+    pub name: String,
+    /// The context text sent as the model's `state`.
+    pub text: String,
+}
+
 /// The persisted configuration.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
@@ -39,6 +48,8 @@ pub struct Settings {
     pub unload: UnloadPolicy,
     /// Probability-bar colour anchors (T-116).
     pub palette: Palette,
+    /// Named context templates, selectable in the overlay (ADR-40).
+    pub contexts: Vec<NamedContext>,
 }
 
 impl Default for Settings {
@@ -49,6 +60,7 @@ impl Default for Settings {
             confidence_threshold: DEFAULT_CONFIDENCE_THRESHOLD,
             unload: UnloadPolicy::Hot,
             palette: Palette::default(),
+            contexts: Vec::new(),
         }
     }
 }
@@ -115,6 +127,7 @@ mod tests {
         assert!((parsed.confidence_threshold - DEFAULT_CONFIDENCE_THRESHOLD).abs() < f32::EPSILON);
         assert_eq!(parsed.unload, UnloadPolicy::Hot);
         assert_eq!(parsed.palette, Palette::default());
+        assert!(parsed.contexts.is_empty());
     }
 
     #[test]
@@ -126,6 +139,21 @@ mod tests {
         assert!((parsed.confidence_threshold - 0.7).abs() < f32::EPSILON);
         assert_eq!(parsed.unload, UnloadPolicy::OnDemand);
         assert_eq!(parsed.palette, Palette::default());
+        assert!(parsed.contexts.is_empty());
+    }
+
+    #[test]
+    fn contexts_round_trip_through_toml() {
+        let settings = Settings {
+            contexts: vec![NamedContext {
+                name: "refund".to_string(),
+                text: "Customer was billed twice.".to_string(),
+            }],
+            ..Settings::default()
+        };
+        let text = toml::to_string_pretty(&settings).expect("serialize");
+        let parsed: Settings = toml::from_str(&text).expect("parse");
+        assert_eq!(parsed.contexts, settings.contexts);
     }
 
     #[test]

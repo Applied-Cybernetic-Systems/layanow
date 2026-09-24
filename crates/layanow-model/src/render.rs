@@ -149,6 +149,20 @@ where
     Ok(RenderedSequence { ids: sequence, marker_pos })
 }
 
+/// Serialize a user-provided context as the model's `state` JSON (ADR-40).
+///
+/// Wraps `text` as `{"context": <text>}`; a blank context becomes the empty
+/// state `{}` (ADR-23). The reference `rl_common.serialize_state` accepts a
+/// dict, and wrapping the evidence this way measured markedly better than
+/// passing it as a bare string.
+#[must_use]
+pub fn context_state(context: &str) -> String {
+    if context.trim().is_empty() {
+        return "{}".to_string();
+    }
+    serde_json::json!({ "context": context }).to_string()
+}
+
 /// Numerically stable softmax.
 #[must_use]
 pub fn softmax(logits: &[f32]) -> Vec<f32> {
@@ -318,5 +332,13 @@ mod tests {
         assert!(scaled[0] < unscaled[0]);
         let sum: f32 = scaled.iter().sum();
         assert!((sum - 1.0).abs() < 1e-6);
+    }
+
+    #[test]
+    fn context_state_wraps_text_and_empties_blanks() {
+        assert_eq!(context_state(""), "{}");
+        assert_eq!(context_state("   "), "{}");
+        assert_eq!(context_state("plain"), "{\"context\":\"plain\"}");
+        assert_eq!(context_state("a \"b\""), "{\"context\":\"a \\\"b\\\"\"}");
     }
 }

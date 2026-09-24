@@ -28,9 +28,14 @@ use layanow_platform::overlay::OverlayApp;
 use layanow_resolvers::TextResolver;
 
 use crate::results::{self, DEFAULT_CONFIDENCE_THRESHOLD, Palette, Results};
-use crate::settings::{Settings, UnloadPolicy};
+use crate::settings::{NamedContext, Settings, UnloadPolicy};
 use crate::theme;
 use crate::worker::{Response, Worker};
+
+/// Maximum context text kept from a selected file, in characters. The renderer
+/// truncates the state to the model's token budget anyway; this only bounds
+/// memory (ADR-40).
+const MAX_CONTEXT_CHARS: usize = 32_768;
 
 /// Left inset for the results block so it does not sit flush against the screen
 /// edge.
@@ -69,6 +74,14 @@ pub struct Overlay {
     status: Option<String>,
     /// Freely typed item text, captured when `Tab` is pressed.
     entry: String,
+    /// The optional context/evidence text, sent as the model's `state` (ADR-40).
+    context: String,
+    /// Saved context templates loaded from settings (ADR-40).
+    contexts: Vec<NamedContext>,
+    /// The template name being typed in the Save field, when open.
+    saving_name: Option<String>,
+    /// The template currently chosen in the dropdown.
+    selected_template: Option<String>,
     /// The id assigned to the next decision.
     next_request: u64,
     /// The id of the decision currently in flight, if any. A reply whose id
@@ -102,6 +115,10 @@ impl Overlay {
             palette: Palette::default(),
             status: None,
             entry: String::new(),
+            context: String::new(),
+            contexts: Vec::new(),
+            saving_name: None,
+            selected_template: None,
             next_request: 0,
             pending_request: None,
             panel_rect: None,
@@ -122,6 +139,7 @@ impl Overlay {
         let settings = Settings::load();
         self.threshold = settings.confidence_threshold;
         self.palette = settings.palette;
+        self.contexts = settings.contexts;
         let on_demand = settings.unload == UnloadPolicy::OnDemand;
         if let Err(error) = self.worker.configure(settings.checkpoint, settings.quant, on_demand) {
             tracing::warn!(%error, "could not apply settings");
@@ -140,14 +158,20 @@ impl Overlay {
         if !typed.is_empty() {
             // Typed text was not read from the screen; record that provenance
             // so it can be told apart from a native highlight.
-            let selection =
-                Selection { text: typed.to_string(), source: Source::Manual, bounds: None };
+            let text = typed.to_string();
             self.entry.clear();
+            if self.try_capture_files(&text) {
+                return;
+            }
+            let selection = Selection { text, source: Source::Manual, bounds: None };
             self.push(selection);
             return;
         }
         match self.resolver.resolve_current_selection() {
             Ok(Some(selection)) => {
+                if self.try_capture_files(&selection.text) {
+                    return;
+                }
                 tracing::debug!(highlight_len = selection.text.len(), "captured highlight");
                 self.push(selection);
             }
@@ -176,6 +200,70 @@ impl Overlay {
         }
     }
 
+    /// If `text` names files (a file-manager `file://` URI, or an existing
+    /// absolute path), read them into the context and return `true` (ADR-40).
+    ///
+    /// A file selection is never a question or an answer, so it is routed to
+    /// the context regardless of what the user was about to capture.
+    fn try_capture_files(&mut self, text: &str) -> bool {
+        let paths = file_paths(text);
+        if paths.is_empty() {
+            return false;
+        }
+        let mut contents = String::new();
+        let mut read = 0_usize;
+        for path in &paths {
+            match std::fs::read_to_string(path) {
+                Ok(file) => {
+                    if !contents.is_empty() {
+                        contents.push_str("\n\n");
+                    }
+                    contents.push_str(&file);
+                    read += 1;
+                }
+                Err(error) => {
+                    tracing::warn!(path = %path.display(), %error, "could not read context file");
+                }
+            }
+        }
+        if read == 0 {
+            self.status = Some("could not read the selected file(s)".to_string());
+            return true;
+        }
+        self.context = truncate_chars(&contents, MAX_CONTEXT_CHARS);
+        self.selected_template = None;
+        self.status = Some(format!("context loaded from {read} file(s)"));
+        true
+    }
+
+    /// Save the current context as a named template (ADR-40), replacing an
+    /// existing template of the same name.
+    fn save_template(&mut self) {
+        let Some(name) = self.saving_name.take() else {
+            return;
+        };
+        let name = name.trim().to_string();
+        if name.is_empty() {
+            self.status = Some("a template needs a name".to_string());
+            return;
+        }
+        let mut settings = Settings::load();
+        if let Some(existing) = settings.contexts.iter_mut().find(|template| template.name == name)
+        {
+            existing.text.clone_from(&self.context);
+        } else {
+            settings.contexts.push(NamedContext { name: name.clone(), text: self.context.clone() });
+        }
+        match settings.save() {
+            Ok(()) => {
+                self.contexts = settings.contexts;
+                self.selected_template = Some(name.clone());
+                self.status = Some(format!("saved template {name:?}"));
+            }
+            Err(error) => self.status = Some(format!("could not save template: {error}")),
+        }
+    }
+
     /// Run a decision if enough has been captured and nothing is in flight.
     fn decide(&mut self) {
         if matches!(self.phase, Phase::Running) {
@@ -193,7 +281,7 @@ impl Overlay {
         // cannot be mistaken for the current one (T-167).
         let id = self.next_request;
         self.next_request = self.next_request.wrapping_add(1);
-        self.phase = match self.worker.decide(id, question, answers) {
+        self.phase = match self.worker.decide(id, self.context.clone(), question, answers) {
             Ok(()) => {
                 self.pending_request = Some(id);
                 Phase::Running
@@ -238,17 +326,24 @@ impl Overlay {
         self.session.clear();
         self.status = None;
         self.entry.clear();
+        self.context.clear();
+        self.saving_name = None;
+        self.selected_template = None;
     }
 
     /// Show or hide the overlay, clearing the session on any change.
     ///
     /// A hidden applet must not retain captured text, and each showing starts
-    /// fresh (ADR-34).
+    /// fresh (ADR-34). Showing also refreshes the saved context templates, in
+    /// case they changed while hidden (ADR-40).
     fn set_visible(&mut self, visible: bool) {
         if self.visible == visible {
             return;
         }
         self.visible = visible;
+        if visible {
+            self.contexts = Settings::load().contexts;
+        }
         self.dismiss();
     }
 
@@ -277,6 +372,60 @@ impl Overlay {
     }
 
     fn draw_capturing(&mut self, ui: &mut egui::Ui) {
+        // Context (state) box with a template dropdown and Save (ADR-40).
+        let mut selected = self.selected_template.clone();
+        let mut save_clicked = false;
+        ui.horizontal(|ui| {
+            theme::shadowed_text(ui, "Context:", theme::FG4, theme::BODY_SIZE);
+            ui.add(
+                egui::TextEdit::singleline(&mut self.context)
+                    .hint_text("optional — type/paste, or select a file")
+                    .desired_width(280.0),
+            );
+            egui::ComboBox::from_id_salt("context-template")
+                .selected_text(selected.as_deref().unwrap_or("templates"))
+                .show_ui(ui, |ui| {
+                    for template in &self.contexts {
+                        ui.selectable_value(
+                            &mut selected,
+                            Some(template.name.clone()),
+                            &template.name,
+                        );
+                    }
+                });
+            save_clicked = ui.button("Save…").clicked();
+        });
+        if selected != self.selected_template {
+            self.selected_template = selected;
+            if let Some(name) = &self.selected_template {
+                if let Some(template) = self.contexts.iter().find(|template| &template.name == name)
+                {
+                    self.context = template.text.clone();
+                }
+            }
+        }
+        if save_clicked {
+            self.saving_name = Some(String::new());
+        }
+        let mut confirm = false;
+        let mut cancel = false;
+        if self.saving_name.is_some() {
+            ui.horizontal(|ui| {
+                theme::shadowed_text(ui, "Name:", theme::FG4, theme::BODY_SIZE);
+                if let Some(name) = &mut self.saving_name {
+                    ui.add(egui::TextEdit::singleline(name).desired_width(200.0));
+                }
+                confirm = ui.button("Save").clicked();
+                cancel = ui.button("Cancel").clicked();
+            });
+        }
+        if confirm {
+            self.save_template();
+        } else if cancel {
+            self.saving_name = None;
+        }
+
+        ui.add_space(6.0);
         if let Some(question) = self.session.question() {
             theme::shadowed_labelled_text(
                 ui,
@@ -303,7 +452,11 @@ impl Overlay {
                 .hint_text("type an item — or highlight text — then press Tab")
                 .desired_width(480.0),
         );
-        response.request_focus();
+        // Only claim focus when nothing else has it, so the context box stays
+        // editable after a click.
+        if ui.ctx().memory(|memory| memory.focused().is_none()) {
+            response.request_focus();
+        }
         if let Some(status) = &self.status {
             theme::shadowed_text(ui, status, theme::YELLOW, theme::BODY_SIZE);
         }
@@ -426,15 +579,82 @@ impl OverlayApp for Overlay {
     }
 
     fn interactive_rect(&self) -> Option<egui::Rect> {
-        // Only the results panel needs the pointer (to dismiss, ADR-15); while
-        // capturing the whole surface stays click-through so text selection in
-        // the app underneath is unaffected (ADR-14, T-166).
-        if matches!(self.phase, Phase::Results(_)) { self.panel_rect } else { None }
+        // The panel is interactive in every phase so the context box, template
+        // dropdown and Save button work (ADR-40); everything outside it stays
+        // click-through (ADR-14).
+        self.panel_rect
     }
 
     fn should_exit(&self) -> bool {
         self.exit
     }
+}
+
+/// The file paths named by `text`: `file://` URIs, or existing absolute paths.
+fn file_paths(text: &str) -> Vec<std::path::PathBuf> {
+    text.lines()
+        .map(str::trim)
+        .filter(|line| !line.is_empty())
+        .filter_map(|line| {
+            if let Some(path) = file_uri_to_path(line) {
+                return Some(path);
+            }
+            let path = std::path::Path::new(line);
+            path.is_file().then(|| path.to_path_buf())
+        })
+        .collect()
+}
+
+/// Convert a `file://` URI to a path, dropping any host and percent-decoding.
+fn file_uri_to_path(uri: &str) -> Option<std::path::PathBuf> {
+    let rest = uri.strip_prefix("file://")?;
+    let path = if let Some(without_slash) = rest.strip_prefix('/') {
+        // Empty host: `file:///path` -> `/path`.
+        format!("/{without_slash}")
+    } else {
+        // `file://host/path` -> `/path`.
+        let index = rest.find('/')?;
+        rest.get(index..)?.to_string()
+    };
+    Some(std::path::PathBuf::from(percent_decode(&path)))
+}
+
+/// Minimal percent-decoding for `file://` URIs.
+fn percent_decode(text: &str) -> String {
+    let bytes = text.as_bytes();
+    let mut out = Vec::with_capacity(bytes.len());
+    let mut index = 0;
+    while index < bytes.len() {
+        if bytes[index] == b'%' && index + 2 < bytes.len() {
+            if let (Some(high), Some(low)) =
+                (hex_digit(bytes[index + 1]), hex_digit(bytes[index + 2]))
+            {
+                out.push(high * 16 + low);
+                index += 3;
+                continue;
+            }
+        }
+        out.push(bytes[index]);
+        index += 1;
+    }
+    String::from_utf8_lossy(&out).into_owned()
+}
+
+fn hex_digit(byte: u8) -> Option<u8> {
+    match byte {
+        b'0'..=b'9' => Some(byte - b'0'),
+        b'a'..=b'f' => Some(byte - b'a' + 10),
+        b'A'..=b'F' => Some(byte - b'A' + 10),
+        _ => None,
+    }
+}
+
+/// Truncate `text` to at most `max` characters (not bytes).
+fn truncate_chars(text: &str, max: usize) -> String {
+    if text.chars().count() <= max {
+        return text.to_string();
+    }
+    text.chars().take(max).collect()
 }
 
 #[cfg(test)]
@@ -453,6 +673,7 @@ mod tests {
     impl DecisionEngine for FirstWins {
         fn decide_choice(
             &mut self,
+            _context: &str,
             _question: &str,
             answers: &[String],
         ) -> Result<Vec<RankedAnswer>, String> {
@@ -508,6 +729,7 @@ mod tests {
     impl DecisionEngine for Gated {
         fn decide_choice(
             &mut self,
+            _context: &str,
             _question: &str,
             answers: &[String],
         ) -> Result<Vec<RankedAnswer>, String> {
@@ -758,6 +980,7 @@ mod tests {
         impl DecisionEngine for Broken {
             fn decide_choice(
                 &mut self,
+                _context: &str,
                 _q: &str,
                 _a: &[String],
             ) -> Result<Vec<RankedAnswer>, String> {
@@ -772,5 +995,85 @@ mod tests {
         overlay.decide();
         wait_for_reply(&mut overlay);
         assert!(matches!(overlay.phase, Phase::Error(ref error) if error == "no model"));
+    }
+
+    #[test]
+    fn file_uris_are_parsed_and_decoded() {
+        assert_eq!(
+            file_uri_to_path("file:///tmp/a%20b.txt"),
+            Some(std::path::PathBuf::from("/tmp/a b.txt"))
+        );
+        assert_eq!(
+            file_uri_to_path("file://localhost/tmp/c.txt"),
+            Some(std::path::PathBuf::from("/tmp/c.txt"))
+        );
+        assert_eq!(file_uri_to_path("https://example.com"), None);
+    }
+
+    #[test]
+    fn truncation_keeps_character_boundaries() {
+        assert_eq!(truncate_chars("héllo", 3), "hél");
+        assert_eq!(truncate_chars("hi", 10), "hi");
+    }
+
+    #[test]
+    fn a_file_selection_becomes_context() {
+        let dir = std::env::temp_dir().join(format!("layanow-ctx-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("passage.txt");
+        std::fs::write(&path, "Mars is the Red Planet.").unwrap();
+
+        let (mut overlay, resolver) = overlay();
+        resolver.set(&format!("file://{}", path.display()));
+        overlay.capture_item();
+
+        assert!(overlay.session.is_empty(), "a file is context, not a question");
+        assert_eq!(overlay.context, "Mars is the Red Planet.");
+        assert!(overlay.status.is_some());
+        std::fs::remove_file(&path).ok();
+    }
+
+    #[test]
+    fn the_context_reaches_the_engine() {
+        struct RecordsContext {
+            seen: Arc<Mutex<Option<String>>>,
+        }
+        impl DecisionEngine for RecordsContext {
+            fn decide_choice(
+                &mut self,
+                context: &str,
+                _question: &str,
+                answers: &[String],
+            ) -> Result<Vec<RankedAnswer>, String> {
+                *self.seen.lock().expect("lock") = Some(context.to_string());
+                Ok(answers
+                    .iter()
+                    .enumerate()
+                    .map(|(index, text)| RankedAnswer {
+                        index,
+                        text: text.clone(),
+                        probability: 1.0,
+                        confidence: 1.0,
+                    })
+                    .collect())
+            }
+        }
+
+        let seen = Arc::new(Mutex::new(None));
+        let resolver = TestResolver::default();
+        let (_commands_tx, commands) = crossbeam_channel::unbounded();
+        let mut overlay = Overlay::new(
+            Worker::spawn_fixed(RecordsContext { seen: Arc::clone(&seen) }),
+            Box::new(resolver.clone()),
+            commands,
+        );
+        overlay.context = "the evidence".to_string();
+        for text in ["q", "a"] {
+            resolver.set(text);
+            overlay.capture_item();
+        }
+        overlay.decide();
+        wait_for_reply(&mut overlay);
+        assert_eq!(seen.lock().expect("lock").as_deref(), Some("the evidence"));
     }
 }

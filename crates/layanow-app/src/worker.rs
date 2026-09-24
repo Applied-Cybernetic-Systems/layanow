@@ -23,6 +23,8 @@ pub enum Request {
     Decide {
         /// Caller-assigned decision id, echoed on the reply.
         id: u64,
+        /// The context/evidence text, used as the model's `state` (ADR-40).
+        context: String,
         /// The question text.
         question: String,
         /// The candidate answers, in capture order.
@@ -63,9 +65,12 @@ pub enum Response {
 ///
 /// The trait lets the UI be exercised without the ~1.7 GB checkpoint.
 pub trait DecisionEngine: Send + 'static {
-    /// Decide which of `answers` best answers `question`.
+    /// Decide which of `answers` best answers `question`, using `context` as
+    /// the model's `state` evidence (ADR-40; an empty context is the empty
+    /// state).
     fn decide_choice(
         &mut self,
+        context: &str,
         question: &str,
         answers: &[String],
     ) -> Result<Vec<RankedAnswer>, String>;
@@ -78,11 +83,14 @@ pub type EngineFactory =
 impl DecisionEngine for layanow_model::Decider {
     fn decide_choice(
         &mut self,
+        context: &str,
         question: &str,
         answers: &[String],
     ) -> Result<Vec<RankedAnswer>, String> {
-        // ADR-23: an empty `state` is the v1 default.
-        layanow_model::Decider::decide_choice(self, "{}", question, answers)
+        // ADR-23/40: the captured context becomes the model's `state`; an empty
+        // context is the empty state.
+        let state = layanow_model::render::context_state(context);
+        layanow_model::Decider::decide_choice(self, &state, question, answers)
             .map_err(|error| error.to_string())
     }
 }
@@ -147,13 +155,14 @@ impl Worker {
     pub fn decide(
         &self,
         id: u64,
+        context: String,
         question: String,
         answers: Vec<String>,
     ) -> Result<(), WorkerGone> {
         self.requests
             .as_ref()
             .ok_or(WorkerGone)?
-            .send(Request::Decide { id, question, answers })
+            .send(Request::Decide { id, context, question, answers })
             .map_err(|_| WorkerGone)
     }
 
@@ -207,12 +216,12 @@ fn run(
     let mut engine = if on_demand { None } else { load(&mut factory, &checkpoint, quant) };
     while let Ok(request) = requests.recv() {
         match request {
-            Request::Decide { id, question, answers } => {
+            Request::Decide { id, context, question, answers } => {
                 if engine.is_none() {
                     engine = load(&mut factory, &checkpoint, quant);
                 }
                 let response = match engine.as_mut() {
-                    Some(engine) => match engine.decide_choice(&question, &answers) {
+                    Some(engine) => match engine.decide_choice(&context, &question, &answers) {
                         Ok(ranked) => Response::Ranked { id, ranked },
                         Err(error) => Response::Failed { id, error },
                     },
@@ -275,6 +284,7 @@ mod tests {
     impl DecisionEngine for ByLength {
         fn decide_choice(
             &mut self,
+            _context: &str,
             _question: &str,
             answers: &[String],
         ) -> Result<Vec<RankedAnswer>, String> {
@@ -299,7 +309,12 @@ mod tests {
     struct Broken;
 
     impl DecisionEngine for Broken {
-        fn decide_choice(&mut self, _q: &str, _a: &[String]) -> Result<Vec<RankedAnswer>, String> {
+        fn decide_choice(
+            &mut self,
+            _context: &str,
+            _q: &str,
+            _a: &[String],
+        ) -> Result<Vec<RankedAnswer>, String> {
             Err("no model".to_string())
         }
     }
@@ -307,7 +322,9 @@ mod tests {
     #[test]
     fn worker_returns_ranked_answers() {
         let worker = Worker::spawn_fixed(ByLength);
-        worker.decide(7, "q".to_string(), vec!["aa".to_string(), "b".to_string()]).unwrap();
+        worker
+            .decide(7, String::new(), "q".to_string(), vec!["aa".to_string(), "b".to_string()])
+            .unwrap();
         let Response::Ranked { id, ranked } = worker.recv().unwrap() else {
             panic!("expected ranked answers");
         };
@@ -319,7 +336,7 @@ mod tests {
     #[test]
     fn worker_propagates_failures() {
         let worker = Worker::spawn_fixed(Broken);
-        worker.decide(3, "q".to_string(), vec!["a".to_string()]).unwrap();
+        worker.decide(3, String::new(), "q".to_string(), vec!["a".to_string()]).unwrap();
         assert_eq!(
             worker.recv().unwrap(),
             Response::Failed { id: 3, error: "no model".to_string() }
@@ -339,7 +356,7 @@ mod tests {
         });
         let worker = Worker::spawn(factory, "test", Quant::Fp32, true);
         for id in 0..2 {
-            worker.decide(id, "q".to_string(), vec!["a".to_string()]).unwrap();
+            worker.decide(id, String::new(), "q".to_string(), vec!["a".to_string()]).unwrap();
             drop(worker.recv().unwrap());
         }
         assert_eq!(builds.load(Ordering::Relaxed), 2, "on-demand loads once per decision");
@@ -356,10 +373,10 @@ mod tests {
             Ok(Box::new(ByLength))
         });
         let worker = Worker::spawn(factory, "english", Quant::Fp32, false);
-        worker.decide(0, "q".to_string(), vec!["a".to_string()]).unwrap();
+        worker.decide(0, String::new(), "q".to_string(), vec!["a".to_string()]).unwrap();
         drop(worker.recv().unwrap());
         worker.configure("multilingual", Quant::Fp32, false).unwrap();
-        worker.decide(1, "q".to_string(), vec!["a".to_string()]).unwrap();
+        worker.decide(1, String::new(), "q".to_string(), vec!["a".to_string()]).unwrap();
         drop(worker.recv().unwrap());
         assert_eq!(&*seen.lock().expect("test lock"), &["english", "multilingual"]);
     }
@@ -375,10 +392,10 @@ mod tests {
             Ok(Box::new(ByLength))
         });
         let worker = Worker::spawn(factory, "english", Quant::Fp32, false);
-        worker.decide(0, "q".to_string(), vec!["a".to_string()]).unwrap();
+        worker.decide(0, String::new(), "q".to_string(), vec!["a".to_string()]).unwrap();
         drop(worker.recv().unwrap());
         worker.configure("english", Quant::Int8, false).unwrap();
-        worker.decide(1, "q".to_string(), vec!["a".to_string()]).unwrap();
+        worker.decide(1, String::new(), "q".to_string(), vec!["a".to_string()]).unwrap();
         drop(worker.recv().unwrap());
         assert_eq!(&*seen.lock().expect("test lock"), &[Quant::Fp32, Quant::Int8]);
     }
