@@ -28,6 +28,7 @@ Decisions live in `DECISIONS.md` as ADRs. This file tracks what is still open.
 | E5 | Config | **TOML at `~/.config/layanow/config.toml`**: `checkpoint`, `confidence_threshold`, `unload` (hot/on-demand) in v1 (ADR-38) |
 | E8 | MSRV/edition | **Rust 1.85 / edition 2024** (pinned in `Cargo.toml`/`rust-toolchain.toml`) |
 | E10 | Localization | UI is **English-only** (ADR-41) |
+| E9 | Telemetry | **None**; no analytics, crash reporting, or phone-home (ADR-42) |
 
 ## Deferred (decide later)
 
@@ -38,4 +39,3 @@ Decisions live in `DECISIONS.md` as ADRs. This file tracks what is still open.
 - [ ] **E2. CI** — keep the Nix-based GitHub Actions workflow as-is?
 - [ ] **E6. History/privacy** — keep a local decision log? Retention?
 - [ ] **E7. Lint strictness** — keep `clippy::pedantic` warn + CI `-D warnings`?
-- [ ] **E9. Telemetry** — none (assumed).

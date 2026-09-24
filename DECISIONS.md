@@ -551,3 +551,15 @@ the strings are short and unambiguous.
 **Consequence:** All user-facing strings are English literals in the UI crates.
 Localization can be added later behind a message catalogue without touching the
 model, capture, or resolver layers.
+
+## ADR-42 — No telemetry
+**Decision:** The applet collects and sends **no telemetry**: no analytics,
+crash reporting, usage tracking, or phone-home of any kind. The only network
+activity is the opt-in, first-run model download (ADR-17); captured text never
+leaves the machine.
+**Why:** The tool reads the user's selected text, which can be sensitive, and
+sending anything about it — or even aggregate usage counts — would be a privacy
+regression with no product benefit. The project is local-first and the
+no-runtime-network invariant already constrains it.
+**Consequence:** No telemetry dependency or endpoint exists; adding one would
+require a new ADR. Diagnostics stay local (`tracing`, E4).
