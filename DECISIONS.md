@@ -154,9 +154,9 @@ APIs.
 
 ## ADR-22 — Repository
 **Decision:** Source lives at `github.com/Applied-Cybernetic-Systems/layanow`
-(private), with a local git repo at `~/projects/layanow`. It was originally
+(**public**), with a local git repo at `~/projects/layassist`. It was originally
 `github.com/Uiyx/layanow`; the repository was transferred to the Applied
-Cybernetic Systems organization on 2026-09-22 and stays **private**.
+Cybernetic Systems organization on 2026-09-22 and made public on 2026-09-23.
 
 ## ADR-23 — MCQ → Laya rendering (A5)
 **Decision:** Map an MCQ as `ins` = question text, `crit` = letter-labelled

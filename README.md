@@ -64,7 +64,7 @@ cargo run -p layanow-app -- settings  # open the settings window
 | `RESOLVERS.md` | `TextResolver` trait and per-platform backends |
 | `LAYA.md` | ONNX contract, checkpoint export, rendering port, calibration |
 | `OPEN-QUESTIONS.md` | Every decision still needing clarification |
-| `TODO.md` | Living, issue-style task log: Open / In Progress / Closed |
+| GitHub Issues | Living task tracker (`area/*` labels, `M0`–`M10` milestones; historical `T-###` log in `CHANGELOG.md`) |
 
 ## Development environment (Nix)
 

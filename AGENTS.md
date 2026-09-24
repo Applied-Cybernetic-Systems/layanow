@@ -24,7 +24,7 @@ flake.nix               # dev shell (Rust toolchain, onnxruntime, a11y, Wayland)
 ```
 
 Docs: `PLAN.md`, `DECISIONS.md` (ADRs), `FEASIBILITY.md`, `RESOLVERS.md`,
-`LAYA.md`, `OPEN-QUESTIONS.md`, and `TODO.md` (the living task log; see below).
+`LAYA.md`, `OPEN-QUESTIONS.md`, and the GitHub issue tracker (see below).
 
 ## Non-negotiable invariants
 
@@ -44,19 +44,19 @@ Docs: `PLAN.md`, `DECISIONS.md` (ADRs), `FEASIBILITY.md`, `RESOLVERS.md`,
    opt-in setting (ADR-36, T-114).
 8. `unsafe` code only in `layanow-platform`, isolated and documented.
 
-## Work tracking (`TODO.md`)
+## Work tracking (GitHub Issues)
 
-`TODO.md` is the **living, issue-style task log** and must be updated as part
-of every change:
+Work is tracked in the **GitHub issue tracker**
+(<https://github.com/Applied-Cybernetic-Systems/layanow/issues>), not in a file:
 
-- It has three sections: **Open**, **In Progress**, **Closed**.
-- One line per task with a stable `T-###` id, e.g.
-  `- **T-120** · YYYY-MM-DD · <milestone/area> · <title> — <detail> (refs)`.
-- When you start a task, move its line to **In Progress**; when you finish it,
-  move it to **Closed** and append `**Closed:** <outcome, date, commit>`.
-- Record anything you notice as a new **Open** line instead of acting silently.
-- The file header documents the full convention; keep it and the line format
-  accurate. New ids are never reused.
+- **Labels** are `area/<core|model|resolve|overlay|app|platform|ui|docs|ci|build|pkg>`
+  plus `deferred`; **milestones** are `M0`–`M10` (see `PLAN.md`).
+- The historical `T-###` ids are kept in issue titles (e.g. `T-130: …`) for
+  traceability; the issue number is the tracker id. Ids are never reused.
+- When you start an issue, assign yourself / comment; when you finish it, close
+  it with a short outcome and the commit, as `**Closed:**` used to.
+- Record anything you notice as a new issue instead of acting silently.
+- Completed work (the old closed log) is archived in `CHANGELOG.md`.
 
 ## Quality gate (must pass before "done")
 

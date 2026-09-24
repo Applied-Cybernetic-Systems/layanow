@@ -22,7 +22,7 @@ Decisions live in `DECISIONS.md` as ADRs. This file tracks what is still open.
 | B3 | X11 support | Wayland + X11 (ADR-21) |
 | C1–C7 | Model defaults | See ADR-27 |
 | D1 | v1 platform | Linux; order Linux → Windows → macOS |
-| E1 | Git | `github.com/Applied-Cybernetic-Systems/layanow` (private) (ADR-22) |
+| E1 | Git | `github.com/Applied-Cybernetic-Systems/layanow` (public) (ADR-22) |
 | E3 | Testing fixtures | **Commit generated golden fixtures** for the rendering/calibration port; replay offline (ADR-29) |
 | E4 | Logging | **`tracing` + `tracing-subscriber`**; `LAYANOW_LOG` (fallback `RUST_LOG`), default `warn`, `LAYANOW_DEBUG` shorthand (T-143) |
 | E5 | Config | **TOML at `~/.config/layanow/config.toml`**: `checkpoint`, `confidence_threshold`, `unload` (hot/on-demand) in v1 (T-118, ADR-38) |
