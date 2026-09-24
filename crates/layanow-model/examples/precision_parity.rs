@@ -221,7 +221,7 @@ fn report(quant: Quant, reference: &[Outcome], candidate: &[Outcome]) {
             slots += 1;
         }
         println!(
-            "  case {index:2}: {}  (fp32 {:.3} {:.3} -> {quant:?} {:.3} {:.3})",
+            "  case {index:2}: {}  (fp32 {:.3} {} -> {quant:?} {:.3} {})",
             if same { "agree " } else { "DIFFER" },
             want.probabilities.get(want.top).copied().unwrap_or(0.0),
             want.top_text,
