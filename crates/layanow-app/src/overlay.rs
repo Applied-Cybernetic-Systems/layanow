@@ -73,6 +73,9 @@ pub struct Overlay {
     threshold: f32,
     /// Whether quiz mode parses a single whole-quiz selection (ADR-44).
     quiz_mode: bool,
+    /// Raw text of the most recently captured quiz, so quiz mode's `Tab`-next
+    /// can tell an unchanged selection from a new one (ADR-44).
+    last_quiz: Option<String>,
     /// Probability-bar colour anchors from settings.
     palette: Palette,
     /// A short user-facing hint (e.g. "no selection") drawn while capturing.
@@ -125,6 +128,7 @@ impl Overlay {
             phase: Phase::Capturing,
             threshold: DEFAULT_CONFIDENCE_THRESHOLD,
             quiz_mode: false,
+            last_quiz: None,
             palette: Palette::default(),
             status: None,
             entry: String::new(),
@@ -226,40 +230,52 @@ impl Overlay {
             self.status = Some("quiz already captured — Esc to start over".to_string());
             return;
         }
+        if let Some((text, source)) = self.read_input() {
+            self.store_quiz(&text, source);
+        }
+    }
+
+    /// Read one item from the typed entry or the native selection, clearing the
+    /// entry. A file selection becomes context and yields `None` (ADR-40); a
+    /// missing or failed selection sets `status`.
+    fn read_input(&mut self) -> Option<(String, Source)> {
         let typed = self.entry.trim().to_string();
         self.entry.clear();
-        let (text, source) = if typed.is_empty() {
-            match self.resolver.resolve_current_selection() {
-                Ok(Some(selection)) => {
-                    if self.try_capture_files(&selection.text) {
-                        return;
-                    }
-                    (selection.text, selection.source)
+        if !typed.is_empty() {
+            return Some((typed, Source::Manual));
+        }
+        match self.resolver.resolve_current_selection() {
+            Ok(Some(selection)) => {
+                if self.try_capture_files(&selection.text) {
+                    return None;
                 }
-                Ok(None) => {
-                    tracing::debug!("no highlight found");
-                    self.status = Some(
-                        "no highlight found — the app may not publish it (type instead)"
-                            .to_string(),
-                    );
-                    return;
-                }
-                Err(error) => {
-                    tracing::warn!(%error, "selection resolver failed");
-                    self.status = Some(format!("selection error: {error}"));
-                    return;
-                }
+                Some((selection.text, selection.source))
             }
-        } else {
-            (typed, Source::Manual)
-        };
+            Ok(None) => {
+                tracing::debug!("no highlight found");
+                self.status = Some(
+                    "no highlight found — the app may not publish it (type instead)".to_string(),
+                );
+                None
+            }
+            Err(error) => {
+                tracing::warn!(%error, "selection resolver failed");
+                self.status = Some(format!("selection error: {error}"));
+                None
+            }
+        }
+    }
 
-        match layanow_core::parse_quiz(&text) {
+    /// Split `text` into the quiz question and its options and store them.
+    /// Records the raw text so the next `Tab` can spot an unchanged selection.
+    fn store_quiz(&mut self, text: &str, source: Source) {
+        match layanow_core::parse_quiz(text) {
             Some((question, options)) => {
                 tracing::debug!(options = options.len(), "captured quiz");
                 for item in std::iter::once(question).chain(options) {
                     self.session.push(Selection { text: item, source, bounds: None });
                 }
+                self.last_quiz = Some(text.to_string());
                 self.status = None;
             }
             None => {
@@ -432,13 +448,45 @@ impl Overlay {
         self.context.clear();
         self.saving_name = None;
         self.selected_template = None;
+        self.last_quiz = None;
     }
 
     /// Quiz mode: from the results, start the next quiz in one step — dismiss
     /// the current results and capture the next selection (ADR-44).
+    /// Quiz mode: from the results, start the next quiz in one step — dismiss
+    /// the current results and capture the next selection (ADR-44).
+    ///
+    /// The current selection is compared with the last quiz first: an unchanged
+    /// selection keeps the results and only reports that nothing changed, so a
+    /// stray `Tab` cannot silently re-run the same quiz.
     fn next_quiz(&mut self) {
+        let typed = self.entry.trim().to_string();
+        let current = if typed.is_empty() {
+            match self.resolver.resolve_current_selection() {
+                Ok(Some(selection)) => Some((selection.text, selection.source)),
+                Ok(None) => None,
+                Err(error) => {
+                    tracing::warn!(%error, "selection resolver failed");
+                    None
+                }
+            }
+        } else {
+            Some((typed, Source::Manual))
+        };
+        let Some((text, source)) = current else {
+            self.status = Some("no new selection — highlight the next quiz".to_string());
+            return;
+        };
+        if self.last_quiz.as_deref() == Some(text.as_str()) {
+            self.status =
+                Some("same selection as the last quiz — highlight the next one".to_string());
+            return;
+        }
+        if self.try_capture_files(&text) {
+            return;
+        }
         self.dismiss();
-        self.capture_item();
+        self.store_quiz(&text, source);
     }
 
     /// Show or hide the overlay, clearing the session on any change.
@@ -631,6 +679,9 @@ impl Overlay {
                                 ui.add_space(6.0);
                             }
                             Self::draw_results(ui, panel);
+                            if let Some(status) = &self.status {
+                                theme::shadowed_text(ui, status, theme::YELLOW, theme::BODY_SIZE);
+                            }
                             ui.add_space(8.0);
                             let hint = if self.quiz_mode {
                                 "Tab: next quiz · click: dismiss · Esc: hide"
@@ -1070,6 +1121,22 @@ mod tests {
         assert!(matches!(overlay.phase, Phase::Capturing));
         assert_eq!(overlay.session.question_text(), Some("Q2"));
         assert_eq!(overlay.session.answer_texts(), ["C", "D"]);
+    }
+
+    #[test]
+    fn quiz_mode_next_ignores_an_unchanged_selection() {
+        let (mut overlay, resolver) = overlay();
+        overlay.set_quiz_mode(true);
+        resolver.set("Q1\nA\nB");
+        overlay.capture_item();
+        overlay.decide();
+        wait_for_reply(&mut overlay);
+        assert!(matches!(overlay.phase, Phase::Results(_)));
+
+        // The selection has not changed: keep the results and report it.
+        overlay.next_quiz();
+        assert!(matches!(overlay.phase, Phase::Results(_)));
+        assert!(overlay.status.is_some());
     }
 
     #[test]

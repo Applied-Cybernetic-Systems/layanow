@@ -605,6 +605,9 @@ least one option is discarded with a status line. The question may wrap (it is
 the whole first block); each option is a single line, so a wrapped option is not
 supported. From the results, `Tab` dismisses the current decision and captures
 the next quiz in a single press, so a whole quiz can be worked through without a
-dismiss click. Turning the setting off restores the per-item `Tab` capture
+dismiss click; if the selection is unchanged the results stay and a status line
+reports it. The results are listed in captured option order (`A`, `B`, …) rather
+than by probability, so they line up with the quiz text, with the top answer
+still highlighted. Turning the setting off restores the per-item `Tab` capture
 (ADR-33). `Settings` gains `quiz_mode`; `layanow_core::parse_quiz` holds the pure
 split so the parsing rules are unit-tested without a window.

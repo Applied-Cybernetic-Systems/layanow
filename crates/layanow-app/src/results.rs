@@ -53,7 +53,8 @@ pub struct ResultRow {
 /// The ranked results panel.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Results {
-    /// Rows, highest probability first.
+    /// Rows in captured option order (`A`, `B`, …); the top answer is flagged
+    /// by [`ResultRow::is_top`].
     pub rows: Vec<ResultRow>,
     /// The decision's Jev-style confidence (`1 - normalized entropy`).
     pub confidence: f32,
@@ -63,18 +64,31 @@ pub struct Results {
 
 /// Build the results panel from ranked answers, colouring each row with
 /// `palette`.
+///
+/// Rows are ordered by the captured option order (`A`, `B`, …), not by
+/// probability, so they line up with how the quiz was typed; the
+/// highest-probability row is flagged [`ResultRow::is_top`].
 #[must_use]
 pub fn results(ranked: &[RankedAnswer], threshold: f32, palette: &Palette) -> Results {
     let confidence = ranked.first().map_or(0.0, |answer| answer.confidence);
-    let rows = ranked
+    // The first maximum wins ties, so the earliest option is highlighted.
+    let top_index = ranked
         .iter()
-        .enumerate()
-        .map(|(rank, answer)| ResultRow {
+        .fold(None, |best: Option<&RankedAnswer>, answer| match best {
+            Some(best) if best.probability >= answer.probability => Some(best),
+            _ => Some(answer),
+        })
+        .map(|answer| answer.index);
+    let mut ordered: Vec<&RankedAnswer> = ranked.iter().collect();
+    ordered.sort_by_key(|answer| answer.index);
+    let rows = ordered
+        .into_iter()
+        .map(|answer| ResultRow {
             label: option_label(answer.index),
             text: answer.text.clone(),
             probability: answer.probability,
             colour: probability_colour(answer.probability, palette),
-            is_top: rank == 0,
+            is_top: Some(answer.index) == top_index,
         })
         .collect();
     Results { rows, confidence, low_confidence: confidence < threshold }
@@ -114,7 +128,7 @@ mod tests {
     }
 
     #[test]
-    fn results_keep_order_and_flag_the_top_answer() {
+    fn results_are_ordered_by_option_and_flag_the_top() {
         let ranked = vec![
             answer(1, "Mars", 0.6, 0.4),
             answer(0, "Venus", 0.25, 0.4),
@@ -122,11 +136,14 @@ mod tests {
         ];
         let panel = results(&ranked, DEFAULT_CONFIDENCE_THRESHOLD, &Palette::default());
         assert_eq!(panel.rows.len(), 3);
-        assert_eq!(panel.rows[0].label, "B");
-        assert_eq!(panel.rows[0].text, "Mars");
-        assert!(panel.rows[0].is_top);
-        assert!(!panel.rows[1].is_top);
-        assert_eq!(panel.rows[1].label, "A");
+        // A, B, C in captured order regardless of probability.
+        assert_eq!(panel.rows[0].label, "A");
+        assert_eq!(panel.rows[0].text, "Venus");
+        assert!(!panel.rows[0].is_top);
+        assert_eq!(panel.rows[1].label, "B");
+        assert_eq!(panel.rows[1].text, "Mars");
+        assert!(panel.rows[1].is_top);
+        assert_eq!(panel.rows[2].label, "C");
         assert!((panel.confidence - 0.4).abs() < f32::EPSILON);
         assert!(panel.low_confidence);
     }
