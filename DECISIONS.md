@@ -589,19 +589,20 @@ under MIT unless stated otherwise.
 ## ADR-44 — Quiz mode: single-selection quiz capture
 **Decision:** A `quiz_mode` setting (default off) lets the user capture a whole
 quiz — the question/statement and its answer options — in **one** selection.
-The captured text is split into blocks: first on blank lines (so a question or
-an option may wrap across several lines), then, when there are no blank lines,
-on single newlines. The first block is the question and every later block is an
-option, shown as `A.`, `B.`, … in the overlay. The model call is unchanged:
-`ins` = question, `crit` = the letter-labelled options.
+The captured text is split so that the question is the first
+blank-line-separated block (so a wrapped question survives) and every non-empty
+line after it is one option; consecutive lines and blank-line-separated options
+parse the same way, and with no blank line at all the text falls back to one
+item per line. Options are shown as `A.`, `B.`, … in the overlay. The model call
+is unchanged: `ins` = question, `crit` = the letter-labelled options.
 **Why:** Quizzes (Likert polls, MCQ exercises) are usually copied as one text
 block; demanding a separate `Tab` capture per option is error-prone. This also
 fits the v1 invariants: it is still native text, still a single-answer `choice`
 (ADR-8), and the clipboard is untouched (ADR-5).
 **Consequence:** Quiz mode is **all-or-nothing**: only the first capture of a
 session is accepted, and a selection that does not split into a question plus at
-least one option is discarded with a status line. Multi-line blocks are kept
-whole, so a wrapped question survives; a newline-separated list (a Likert scale)
-is the fallback. Turning the setting off restores the per-item `Tab` capture
+least one option is discarded with a status line. The question may wrap (it is
+the whole first block); each option is a single line, so a wrapped option is not
+supported. Turning the setting off restores the per-item `Tab` capture
 (ADR-33). `Settings` gains `quiz_mode`; `layanow_core::parse_quiz` holds the pure
 split so the parsing rules are unit-tested without a window.

@@ -149,32 +149,36 @@ impl Session {
 
 /// Split a whole-quiz selection into its question and answer options.
 ///
-/// Quiz mode's single-capture format (ADR-44). The text is split into blocks:
-/// first on **blank lines**, so a question or option may wrap across several
-/// lines; when there are no blank lines the text is split on single newlines
-/// instead. The first block is the question and every later block is an option.
+/// Quiz mode's single-capture format (ADR-44). The question is the first
+/// blank-line-separated block, so a wrapped question survives. Every non-empty
+/// line after it is one option — whether the options are consecutive lines (a
+/// Likert scale) or separated by blank lines. When there is no blank line at
+/// all, the whole text falls back to one item per line.
 ///
-/// Returns `None` when there is no clear question-plus-option split, i.e. fewer
-/// than two non-empty blocks/lines. The caller treats that as "not a quiz" and
-/// captures nothing (all-or-nothing).
+/// Returns `None` when there is no question plus at least one option. The
+/// caller treats that as "not a quiz" and captures nothing (all-or-nothing).
 #[must_use]
 pub fn parse_quiz(text: &str) -> Option<(String, Vec<String>)> {
-    let mut blocks = split_blocks(text);
-    if blocks.len() < 2 {
-        // A single block may still hold one item per line (a Likert list, say).
-        blocks = text
-            .lines()
-            .map(str::trim)
-            .filter(|line| !line.is_empty())
-            .map(str::to_string)
-            .collect();
-    }
-    let question = blocks.first()?.clone();
-    let options = blocks.get(1..)?.to_vec();
+    let blocks = split_blocks(text);
+    let (question, options) = if blocks.len() < 2 {
+        let lines = non_empty_lines(text);
+        (lines.first()?.clone(), lines.get(1..)?.to_vec())
+    } else {
+        // Each line after the question is one option, so consecutive and
+        // blank-line-separated options both parse (a Likert scale is a single
+        // block whose options are one per line).
+        let options = blocks[1..].iter().flat_map(|block| non_empty_lines(block)).collect();
+        (blocks.first()?.clone(), options)
+    };
     if options.is_empty() {
         return None;
     }
     Some((question, options))
+}
+
+/// The trimmed, non-empty lines of `text`, in order.
+fn non_empty_lines(text: &str) -> Vec<String> {
+    text.lines().map(str::trim).filter(|line| !line.is_empty()).map(str::to_string).collect()
 }
 
 /// Group `text` into blocks separated by one or more blank lines, preserving
@@ -261,11 +265,25 @@ mod tests {
     }
 
     #[test]
-    fn quiz_parsing_keeps_multi_line_blocks() {
+    fn quiz_parsing_keeps_a_wrapped_question() {
         let text = "A wrapped question\nthat continues here\n\nOption one\n\nOption two";
         let (question, options) = parse_quiz(text).expect("a quiz");
         assert_eq!(question, "A wrapped question\nthat continues here");
         assert_eq!(options, ["Option one", "Option two"]);
+    }
+
+    #[test]
+    fn quiz_parsing_splits_consecutive_option_lines_in_one_block() {
+        let text = "Publicly owned research institutions, such as space programs, should receive more public funding.\n\nStrongly Agree\nAgree\nNeutral / Not Sure\nDisagree\nStrongly Disagree";
+        let (question, options) = parse_quiz(text).expect("a quiz");
+        assert_eq!(
+            question,
+            "Publicly owned research institutions, such as space programs, should receive more public funding."
+        );
+        assert_eq!(
+            options,
+            ["Strongly Agree", "Agree", "Neutral / Not Sure", "Disagree", "Strongly Disagree"]
+        );
     }
 
     #[test]

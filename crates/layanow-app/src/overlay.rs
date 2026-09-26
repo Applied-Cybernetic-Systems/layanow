@@ -1002,6 +1002,25 @@ mod tests {
     }
 
     #[test]
+    fn quiz_mode_splits_a_likert_block_into_one_option_per_line() {
+        let (mut overlay, resolver) = overlay();
+        overlay.set_quiz_mode(true);
+        resolver.set(
+            "Publicly owned research institutions should receive more funding.\n\n\
+             Strongly Agree\nAgree\nNeutral / Not Sure\nDisagree\nStrongly Disagree",
+        );
+        overlay.capture_item();
+        assert_eq!(
+            overlay.session.question_text(),
+            Some("Publicly owned research institutions should receive more funding.")
+        );
+        assert_eq!(
+            overlay.session.answer_texts(),
+            ["Strongly Agree", "Agree", "Neutral / Not Sure", "Disagree", "Strongly Disagree"]
+        );
+    }
+
+    #[test]
     fn quiz_mode_is_all_or_nothing() {
         let (mut overlay, resolver) = overlay();
         overlay.set_quiz_mode(true);

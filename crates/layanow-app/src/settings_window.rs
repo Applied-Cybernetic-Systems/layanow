@@ -98,8 +98,8 @@ impl SettingsApp {
             "Quiz mode — capture the whole quiz in one selection",
         );
         ui.small(
-            "Highlight the whole quiz (question then options) once. A blank line — or, \
-             with none, a newline — separates them; the options show as A, B, C…",
+            "Highlight the whole quiz (question then options) once. A blank line separates \
+             the question from its options; every line after it is one option (A, B, C…).",
         );
     }
 
