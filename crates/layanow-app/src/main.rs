@@ -127,6 +127,7 @@ fn run_applet() -> Result<(), Box<dyn std::error::Error>> {
     let resolver = layanow_platform::selection::resolver();
     let mut overlay = Overlay::new(worker, resolver, control.receiver);
     overlay.set_threshold(settings.confidence_threshold);
+    overlay.set_quiz_mode(settings.quiz_mode);
     let result = layanow_platform::overlay::run(overlay);
     // Process exit does not run the control thread's destructor, so unlink the
     // socket explicitly on a clean exit.

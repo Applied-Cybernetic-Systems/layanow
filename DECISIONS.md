@@ -585,3 +585,23 @@ retaining their copyright and attribution notices (including the Apache-2.0
 NOTICE files, the Unicode-3.0 license, and the `epaint_default_fonts` OFL-1.1 /
 Ubuntu-font-1.0 fonts) when distributing binaries. Contributions are accepted
 under MIT unless stated otherwise.
+
+## ADR-44 — Quiz mode: single-selection quiz capture
+**Decision:** A `quiz_mode` setting (default off) lets the user capture a whole
+quiz — the question/statement and its answer options — in **one** selection.
+The captured text is split into blocks: first on blank lines (so a question or
+an option may wrap across several lines), then, when there are no blank lines,
+on single newlines. The first block is the question and every later block is an
+option, shown as `A.`, `B.`, … in the overlay. The model call is unchanged:
+`ins` = question, `crit` = the letter-labelled options.
+**Why:** Quizzes (Likert polls, MCQ exercises) are usually copied as one text
+block; demanding a separate `Tab` capture per option is error-prone. This also
+fits the v1 invariants: it is still native text, still a single-answer `choice`
+(ADR-8), and the clipboard is untouched (ADR-5).
+**Consequence:** Quiz mode is **all-or-nothing**: only the first capture of a
+session is accepted, and a selection that does not split into a question plus at
+least one option is discarded with a status line. Multi-line blocks are kept
+whole, so a wrapped question survives; a newline-separated list (a Likert scale)
+is the fallback. Turning the setting off restores the per-item `Tab` capture
+(ADR-33). `Settings` gains `quiz_mode`; `layanow_core::parse_quiz` holds the pure
+split so the parsing rules are unit-tested without a window.

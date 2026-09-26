@@ -61,6 +61,9 @@ enum Phase {
 }
 
 /// The egui application behind the overlay.
+// The overlay keeps a handful of independent booleans (visibility, exit,
+// picker, quiz mode); a dedicated enum per flag would be no clearer here.
+#[allow(clippy::struct_excessive_bools)]
 pub struct Overlay {
     session: Session,
     resolver: Box<dyn TextResolver>,
@@ -68,6 +71,8 @@ pub struct Overlay {
     commands: Receiver<Command>,
     phase: Phase,
     threshold: f32,
+    /// Whether quiz mode parses a single whole-quiz selection (ADR-44).
+    quiz_mode: bool,
     /// Probability-bar colour anchors from settings.
     palette: Palette,
     /// A short user-facing hint (e.g. "no selection") drawn while capturing.
@@ -119,6 +124,7 @@ impl Overlay {
             commands,
             phase: Phase::Capturing,
             threshold: DEFAULT_CONFIDENCE_THRESHOLD,
+            quiz_mode: false,
             palette: Palette::default(),
             status: None,
             entry: String::new(),
@@ -142,12 +148,19 @@ impl Overlay {
         self.threshold = threshold;
     }
 
+    /// Set quiz mode (from settings): a single selection is split into the
+    /// question and its options (ADR-44).
+    pub fn set_quiz_mode(&mut self, quiz_mode: bool) {
+        self.quiz_mode = quiz_mode;
+    }
+
     /// Re-read the settings file and apply it live: the
     /// threshold changes immediately, and the worker is reconfigured for the
     /// checkpoint and unload policy.
     fn apply_settings(&mut self) {
         let settings = Settings::load();
         self.threshold = settings.confidence_threshold;
+        self.quiz_mode = settings.quiz_mode;
         self.palette = settings.palette;
         self.contexts = settings.contexts;
         let on_demand = settings.unload == UnloadPolicy::OnDemand;
@@ -163,6 +176,10 @@ impl Overlay {
     /// repeat of the most recent item is ignored so a double-tap does not add
     /// the same text twice.
     fn capture_item(&mut self) {
+        if self.quiz_mode {
+            self.capture_quiz();
+            return;
+        }
         let typed = self.entry.trim();
         tracing::debug!(entry_len = typed.len(), "capture item");
         if !typed.is_empty() {
@@ -194,6 +211,61 @@ impl Overlay {
             Err(error) => {
                 tracing::warn!(%error, "selection resolver failed");
                 self.status = Some(format!("selection error: {error}"));
+            }
+        }
+    }
+
+    /// Capture a whole quiz from one selection and split it into the question
+    /// and its options (quiz mode, ADR-44).
+    ///
+    /// All-or-nothing: only the first capture of a session is accepted, and a
+    /// selection that does not split into a question plus at least one option
+    /// captures nothing.
+    fn capture_quiz(&mut self) {
+        if !self.session.is_empty() {
+            self.status = Some("quiz already captured — Esc to start over".to_string());
+            return;
+        }
+        let typed = self.entry.trim().to_string();
+        self.entry.clear();
+        let (text, source) = if typed.is_empty() {
+            match self.resolver.resolve_current_selection() {
+                Ok(Some(selection)) => {
+                    if self.try_capture_files(&selection.text) {
+                        return;
+                    }
+                    (selection.text, selection.source)
+                }
+                Ok(None) => {
+                    tracing::debug!("no highlight found");
+                    self.status = Some(
+                        "no highlight found — the app may not publish it (type instead)"
+                            .to_string(),
+                    );
+                    return;
+                }
+                Err(error) => {
+                    tracing::warn!(%error, "selection resolver failed");
+                    self.status = Some(format!("selection error: {error}"));
+                    return;
+                }
+            }
+        } else {
+            (typed, Source::Manual)
+        };
+
+        match layanow_core::parse_quiz(&text) {
+            Some((question, options)) => {
+                tracing::debug!(options = options.len(), "captured quiz");
+                for item in std::iter::once(question).chain(options) {
+                    self.session.push(Selection { text: item, source, bounds: None });
+                }
+                self.status = None;
+            }
+            None => {
+                self.status = Some(
+                    "could not read a quiz — highlight the question and its options".to_string(),
+                );
             }
         }
     }
@@ -462,30 +534,15 @@ impl Overlay {
         }
 
         ui.add_space(6.0);
-        if let Some(question) = self.session.question() {
-            theme::shadowed_labelled_text(
-                ui,
-                "Question: ",
-                theme::FG4,
-                &question.selection.text,
-                theme::BLUE,
-                theme::BODY_SIZE,
-            );
-        } else {
-            theme::shadowed_text(ui, "Highlight the question text…", theme::FG4, theme::BODY_SIZE);
-        }
-        for (index, answer) in self.session.answers().iter().enumerate() {
-            theme::shadowed_text(
-                ui,
-                &format!("Answer {}: {}", index + 1, answer.selection.text),
-                theme::GREEN,
-                theme::BODY_SIZE,
-            );
-        }
+        self.draw_items(ui);
         ui.add_space(12.0);
         let response = ui.add(
             egui::TextEdit::singleline(&mut self.entry)
-                .hint_text("type an item — or highlight text — then press Tab")
+                .hint_text(if self.quiz_mode {
+                    "type the whole quiz — or highlight it — then press Tab"
+                } else {
+                    "type an item — or highlight text — then press Tab"
+                })
                 .desired_width(480.0),
         );
         // Only claim focus when nothing else has it, so the context box stays
@@ -496,12 +553,44 @@ impl Overlay {
         if let Some(status) = &self.status {
             theme::shadowed_text(ui, status, theme::YELLOW, theme::BODY_SIZE);
         }
-        theme::shadowed_text(
-            ui,
-            "Tab: add · Enter: decide · Esc: hide",
-            theme::FG4,
-            theme::BODY_SIZE,
-        );
+        let hint = if self.quiz_mode {
+            "Tab: load the whole quiz · Enter: decide · Esc: hide"
+        } else {
+            "Tab: add · Enter: decide · Esc: hide"
+        };
+        theme::shadowed_text(ui, hint, theme::FG4, theme::BODY_SIZE);
+    }
+
+    /// Draw the captured question and answers. In quiz mode the answers are
+    /// lettered (`A.`, `B.`, …) to match the model's option labels (ADR-44).
+    fn draw_items(&self, ui: &mut egui::Ui) {
+        if let Some(question) = self.session.question() {
+            theme::shadowed_labelled_text(
+                ui,
+                "Question: ",
+                theme::FG4,
+                &question.selection.text,
+                theme::BLUE,
+                theme::BODY_SIZE,
+            );
+        } else if self.quiz_mode {
+            theme::shadowed_text(
+                ui,
+                "Highlight the whole quiz (question then options)…",
+                theme::FG4,
+                theme::BODY_SIZE,
+            );
+        } else {
+            theme::shadowed_text(ui, "Highlight the question text…", theme::FG4, theme::BODY_SIZE);
+        }
+        for (index, answer) in self.session.answers().iter().enumerate() {
+            let label = if self.quiz_mode {
+                format!("{}. {}", layanow_model::render::option_label(index), answer.selection.text)
+            } else {
+                format!("Answer {}: {}", index + 1, answer.selection.text)
+            };
+            theme::shadowed_text(ui, &label, theme::GREEN, theme::BODY_SIZE);
+        }
     }
 
     fn draw(&mut self, ui: &mut egui::Ui) {
@@ -889,6 +978,46 @@ mod tests {
         assert_eq!(overlay.session.question_text(), Some("Which planet?"));
         assert_eq!(overlay.session.answer_texts(), ["Mars"]);
         assert!(overlay.status.is_none());
+    }
+
+    #[test]
+    fn quiz_mode_splits_one_selection_into_question_and_options() {
+        let (mut overlay, resolver) = overlay();
+        overlay.set_quiz_mode(true);
+        resolver.set("All taxes should be abolished.\nStrongly Agree\nAgree\nDisagree");
+        overlay.capture_item();
+        assert_eq!(overlay.session.question_text(), Some("All taxes should be abolished."));
+        assert_eq!(overlay.session.answer_texts(), ["Strongly Agree", "Agree", "Disagree"]);
+        assert!(overlay.status.is_none());
+    }
+
+    #[test]
+    fn quiz_mode_parses_blank_line_separated_options() {
+        let (mut overlay, resolver) = overlay();
+        overlay.set_quiz_mode(true);
+        resolver.set("Which stakeholder is external?\n\nThe design team\n\nThe dean");
+        overlay.capture_item();
+        assert_eq!(overlay.session.question_text(), Some("Which stakeholder is external?"));
+        assert_eq!(overlay.session.answer_texts(), ["The design team", "The dean"]);
+    }
+
+    #[test]
+    fn quiz_mode_is_all_or_nothing() {
+        let (mut overlay, resolver) = overlay();
+        overlay.set_quiz_mode(true);
+        // A single line is not a quiz: nothing is captured.
+        resolver.set("just a line");
+        overlay.capture_item();
+        assert!(overlay.session.is_empty());
+        assert!(overlay.status.is_some());
+
+        // Once a quiz is captured, further Tab presses do not append.
+        resolver.set("Question\nA\nB");
+        overlay.capture_item();
+        assert_eq!(overlay.session.answer_texts(), ["A", "B"]);
+        resolver.set("C");
+        overlay.capture_item();
+        assert_eq!(overlay.session.answer_texts(), ["A", "B"]);
     }
 
     #[test]

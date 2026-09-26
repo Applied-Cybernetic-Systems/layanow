@@ -91,6 +91,18 @@ impl SettingsApp {
         }
     }
 
+    /// The quiz-mode checkbox and its explanation (ADR-44).
+    fn quiz_mode(&mut self, ui: &mut egui::Ui) {
+        ui.checkbox(
+            &mut self.settings.quiz_mode,
+            "Quiz mode — capture the whole quiz in one selection",
+        );
+        ui.small(
+            "Highlight the whole quiz (question then options) once. A blank line — or, \
+             with none, a newline — separates them; the options show as A, B, C…",
+        );
+    }
+
     /// The named-context editor (ADR-40): list, delete and add templates.
     fn context_templates(&mut self, ui: &mut egui::Ui) {
         ui.collapsing("Context templates", |ui| {
@@ -214,6 +226,9 @@ impl eframe::App for SettingsApp {
                     UnloadPolicy::OnDemand,
                     "On demand — unload after each decision (slower next answer)",
                 );
+
+                ui.add_space(10.0);
+                self.quiz_mode(ui);
 
                 ui.add_space(10.0);
                 ui.label("Probability colours");

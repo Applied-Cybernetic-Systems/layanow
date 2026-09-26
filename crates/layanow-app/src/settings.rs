@@ -46,6 +46,9 @@ pub struct Settings {
     pub confidence_threshold: f32,
     /// Hot vs on-demand model residency (ADR-11).
     pub unload: UnloadPolicy,
+    /// Quiz mode: capture a whole quiz in a single selection and split it into
+    /// the question and its options (ADR-44).
+    pub quiz_mode: bool,
     /// Probability-bar colour anchors.
     pub palette: Palette,
     /// Named context templates, selectable in the overlay (ADR-40).
@@ -59,6 +62,7 @@ impl Default for Settings {
             quant: Quant::Fp32,
             confidence_threshold: DEFAULT_CONFIDENCE_THRESHOLD,
             unload: UnloadPolicy::Hot,
+            quiz_mode: false,
             palette: Palette::default(),
             contexts: Vec::new(),
         }
@@ -126,6 +130,7 @@ mod tests {
         assert_eq!(parsed.quant, Quant::Fp32);
         assert!((parsed.confidence_threshold - DEFAULT_CONFIDENCE_THRESHOLD).abs() < f32::EPSILON);
         assert_eq!(parsed.unload, UnloadPolicy::Hot);
+        assert!(!parsed.quiz_mode);
         assert_eq!(parsed.palette, Palette::default());
         assert!(parsed.contexts.is_empty());
     }
@@ -138,8 +143,17 @@ mod tests {
         assert_eq!(parsed.quant, Quant::Fp32);
         assert!((parsed.confidence_threshold - 0.7).abs() < f32::EPSILON);
         assert_eq!(parsed.unload, UnloadPolicy::OnDemand);
+        assert!(!parsed.quiz_mode);
         assert_eq!(parsed.palette, Palette::default());
         assert!(parsed.contexts.is_empty());
+    }
+
+    #[test]
+    fn quiz_mode_round_trips_through_toml() {
+        let settings = Settings { quiz_mode: true, ..Settings::default() };
+        let text = toml::to_string_pretty(&settings).expect("serialize");
+        let parsed: Settings = toml::from_str(&text).expect("parse");
+        assert!(parsed.quiz_mode);
     }
 
     #[test]

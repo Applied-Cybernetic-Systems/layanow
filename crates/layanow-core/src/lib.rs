@@ -147,6 +147,57 @@ impl Session {
     }
 }
 
+/// Split a whole-quiz selection into its question and answer options.
+///
+/// Quiz mode's single-capture format (ADR-44). The text is split into blocks:
+/// first on **blank lines**, so a question or option may wrap across several
+/// lines; when there are no blank lines the text is split on single newlines
+/// instead. The first block is the question and every later block is an option.
+///
+/// Returns `None` when there is no clear question-plus-option split, i.e. fewer
+/// than two non-empty blocks/lines. The caller treats that as "not a quiz" and
+/// captures nothing (all-or-nothing).
+#[must_use]
+pub fn parse_quiz(text: &str) -> Option<(String, Vec<String>)> {
+    let mut blocks = split_blocks(text);
+    if blocks.len() < 2 {
+        // A single block may still hold one item per line (a Likert list, say).
+        blocks = text
+            .lines()
+            .map(str::trim)
+            .filter(|line| !line.is_empty())
+            .map(str::to_string)
+            .collect();
+    }
+    let question = blocks.first()?.clone();
+    let options = blocks.get(1..)?.to_vec();
+    if options.is_empty() {
+        return None;
+    }
+    Some((question, options))
+}
+
+/// Group `text` into blocks separated by one or more blank lines, preserving
+/// internal newlines within a block and trimming each block.
+fn split_blocks(text: &str) -> Vec<String> {
+    let mut blocks = Vec::new();
+    let mut current: Vec<&str> = Vec::new();
+    for line in text.lines() {
+        if line.trim().is_empty() {
+            if !current.is_empty() {
+                blocks.push(current.join("\n").trim().to_string());
+                current.clear();
+            }
+        } else {
+            current.push(line);
+        }
+    }
+    if !current.is_empty() {
+        blocks.push(current.join("\n").trim().to_string());
+    }
+    blocks
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -188,5 +239,38 @@ mod tests {
         session.clear();
         assert!(session.is_empty());
         assert_eq!(session.question_text(), None);
+    }
+
+    #[test]
+    fn quiz_parsing_splits_on_blank_lines() {
+        let text = "Which stakeholder is external?\n\n\nThe design team\n\n\nThe quality team\n\n\nThe development team";
+        let (question, options) = parse_quiz(text).expect("a quiz");
+        assert_eq!(question, "Which stakeholder is external?");
+        assert_eq!(options, ["The design team", "The quality team", "The development team"]);
+    }
+
+    #[test]
+    fn quiz_parsing_falls_back_to_single_newlines() {
+        let text = "All taxes should be abolished.\nStrongly Agree\nAgree\nNeutral / Not Sure\nDisagree\nStrongly Disagree";
+        let (question, options) = parse_quiz(text).expect("a quiz");
+        assert_eq!(question, "All taxes should be abolished.");
+        assert_eq!(
+            options,
+            ["Strongly Agree", "Agree", "Neutral / Not Sure", "Disagree", "Strongly Disagree"]
+        );
+    }
+
+    #[test]
+    fn quiz_parsing_keeps_multi_line_blocks() {
+        let text = "A wrapped question\nthat continues here\n\nOption one\n\nOption two";
+        let (question, options) = parse_quiz(text).expect("a quiz");
+        assert_eq!(question, "A wrapped question\nthat continues here");
+        assert_eq!(options, ["Option one", "Option two"]);
+    }
+
+    #[test]
+    fn quiz_parsing_rejects_a_single_line_or_empty_text() {
+        assert_eq!(parse_quiz("just one line"), None);
+        assert_eq!(parse_quiz("  \n \n"), None);
     }
 }

@@ -32,6 +32,9 @@ Linux/Wayland, working end to end:
   colours; it writes `~/.config/layanow/config.toml` and applies live (ADR-38).
 - A **click-through** overlay that only grabs the keyboard while shown, with
   ranked results and probability colours (ADR-14/25/31).
+- An optional **quiz mode** (ADR-44): highlight a whole quiz — question plus
+  options — once, and it is split into the question and lettered `A.`/`B.`/…
+  options.
 
 Not yet: X11 and Windows/macOS selection backends, accessibility and OCR
 resolvers, and multi-answer support.
@@ -43,6 +46,7 @@ cargo run -p layanow-app            # resident applet; overlay starts hidden
 cargo run -p layanow-app -- toggle  # show/hide · also: show, hide, quit
 cargo run -p layanow-app -- settings  # open the settings window
 # highlight text (or type), Tab to add · Enter to decide · Esc: hide
+# quiz mode: highlight the whole quiz once, then Enter
 # optional: put evidence in the Context box (type/paste, Files… picker, file-manager selection, or a saved template)
 ```
 
