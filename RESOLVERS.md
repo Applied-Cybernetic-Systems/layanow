@@ -20,6 +20,9 @@ pub trait TextResolver: Send + Sync {
     fn available(&self) -> bool;
     /// Read the app's current native text selection, if any.
     fn resolve_current_selection(&self) -> Result<Option<Selection>, ResolveError>;
+    /// Clear the native selection so the source app un-highlights it
+    /// (opt-in "clear on Enter", ADR-46). Default: no-op.
+    fn clear_current_selection(&self) -> Result<(), ResolveError> { Ok(()) }
 }
 ```
 
@@ -31,8 +34,11 @@ and would need its own interface.
 `resolve_region` is removed from v1: the overlay is click-through and does not
 receive drags (ADR-14).
 
-Resolvers must be side-effect free with respect to the clipboard (ADR-5): read
-the selection buffer; never overwrite the clipboard.
+Resolvers must be side-effect free with respect to the **regular clipboard**
+(ADR-5): read the selection buffer; never overwrite the clipboard. The one
+opt-in exception is `clear_current_selection` (ADR-46), which clears the
+**PRIMARY** selection only so the source app drops its highlight; it is used by
+the disabled-by-default "clear on `Enter`" setting.
 
 ## The three platform backends
 
@@ -40,7 +46,8 @@ the selection buffer; never overwrite the clipboard.
 - **Wayland:** read the PRIMARY selection via `wl-clipboard-rs` (`wl-paste -p`
   equivalent). The crate uses `ext-data-control` / `wlr-data-control` v2, which
   wlroots compositors provide. PRIMARY is separate from the clipboard,
-  so nothing is clobbered. **Implemented.** If an app does not publish
+  so nothing is clobbered. Clearing PRIMARY (`copy::clear`, ADR-46) is used by
+  the opt-in "clear on `Enter`" setting. **Implemented.** If an app does not publish
   PRIMARY, optionally fall back to a simulated copy (`wtype`) **with clipboard
   save + restore** (opt-in).
 - **X11:** read the PRIMARY selection directly (`x11rb` / `x11-clipboard`).

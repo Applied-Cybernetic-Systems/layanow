@@ -113,7 +113,7 @@ impl SettingsApp {
         ui.checkbox(&mut self.settings.quiz_option_letters, "Show captured options as A, B, C…");
         ui.checkbox(
             &mut self.settings.quiz_clear_on_enter,
-            "Clear the captured highlight when Enter is pressed",
+            "Clear the native highlight when Enter is pressed",
         );
         ui.checkbox(&mut self.settings.quiz_tab_next, "Tab from the results loads the next quiz");
         ui.small(

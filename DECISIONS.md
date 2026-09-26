@@ -614,8 +614,9 @@ single `quiz_mode` (ADR-44):
 - `quiz_parse` — split a whole-quiz selection into question + options (ADR-44).
 - `quiz_option_letters` — draw the captured options as `A.`, `B.`, … instead of
   `Answer 1:`.
-- `quiz_clear_on_enter` — clear the captured question and answers as soon as
-  `Enter` sends the decision (the question is kept for the results header).
+- `quiz_clear_on_enter` — clear the captured question and answers, **and the
+  native PRIMARY selection** (so the source app un-highlights), as soon as
+  `Enter` sends the decision; the question is kept for the results header.
 - `quiz_tab_next` — `Tab` while results are shown loads the next quiz, capturing
   the current selection directly (Context is preserved).
 - `results_typed_order` (**global**, default **on**) — list results in captured
@@ -632,3 +633,20 @@ parsing. Each toggle is separately testable.
 settings window shows the quiz toggles as a group. `results_typed_order` applies
 to every mode, not just quiz mode. The parser and the overlay read only the
 toggle they need.
+
+## ADR-46 — Clear the PRIMARY selection to un-highlight (opt-in)
+**Decision:** The disabled-by-default "clear on `Enter`" quiz option (ADR-45)
+clears the native **PRIMARY** selection in addition to the overlay's captured
+items. On Wayland this calls `wl-clipboard-rs`'s
+`copy::clear(Primary, …)`, which sets PRIMARY to none; the compositor then
+notifies the source app, which drops its visual highlight. The regular clipboard
+is never touched (ADR-5).
+**Why:** After a decision the previous question usually stays highlighted in the
+quiz app, which is distracting and makes selecting the next question awkward.
+Clearing PRIMARY is the only way a window-less client can make the source app
+un-highlight; it is the same mechanism clipboard managers use.
+**Consequence:** `TextResolver` gains `clear_current_selection` (default no-op;
+the Wayland backend implements it). This is a deliberate, documented exception
+to "resolvers only read": it is opt-in, limited to PRIMARY, and never writes to
+the regular clipboard. A compositor without `ext-data-control` /
+`wlr-data-control` v2 logs a warning and continues.

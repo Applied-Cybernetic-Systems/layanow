@@ -415,9 +415,13 @@ impl Overlay {
             Ok(()) => {
                 self.pending_request = Some(id);
                 if self.quiz_clear_on_enter {
-                    // Un-highlight the captured quiz once it has been sent, so
-                    // the next `Tab` can capture the next question (ADR-45).
+                    // Un-highlight the captured quiz once it has been sent — both
+                    // the overlay's items and the native PRIMARY selection, so
+                    // the source app drops its highlight (ADR-45/46).
                     self.session.clear();
+                    if let Err(error) = self.resolver.clear_current_selection() {
+                        tracing::warn!(%error, "could not clear the native selection");
+                    }
                 }
                 Phase::Running
             }
@@ -901,12 +905,17 @@ mod tests {
     #[derive(Clone, Default)]
     struct TestResolver {
         current: Arc<Mutex<Option<Selection>>>,
+        clears: Arc<Mutex<usize>>,
     }
 
     impl TestResolver {
         fn set(&self, text: &str) {
             *self.current.lock().expect("test lock") =
                 Some(Selection { text: text.to_string(), source: Source::Selection, bounds: None });
+        }
+
+        fn clears(&self) -> usize {
+            *self.clears.lock().expect("test lock")
         }
     }
 
@@ -921,6 +930,11 @@ mod tests {
 
         fn resolve_current_selection(&self) -> Result<Option<Selection>, ResolveError> {
             Ok(self.current.lock().expect("test lock").clone())
+        }
+
+        fn clear_current_selection(&self) -> Result<(), ResolveError> {
+            *self.clears.lock().expect("test lock") += 1;
+            Ok(())
         }
     }
 
@@ -1137,6 +1151,8 @@ mod tests {
         overlay.decide();
         assert!(overlay.session.is_empty());
         assert_eq!(overlay.last_question.as_deref(), Some("Q1"));
+        // The native selection is cleared so the source app un-highlights.
+        assert_eq!(resolver.clears(), 1);
     }
 
     #[test]

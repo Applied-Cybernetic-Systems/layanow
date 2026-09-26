@@ -10,6 +10,7 @@ use std::io::Read;
 
 use layanow_core::{Selection, Source};
 use layanow_resolvers::{ResolveError, TextResolver};
+use wl_clipboard_rs::copy;
 use wl_clipboard_rs::paste::{ClipboardType, Error as PasteError, MimeType, Seat, get_contents};
 
 /// Reads the Wayland **PRIMARY** selection (`wl-paste -p`).
@@ -63,6 +64,13 @@ impl TextResolver for PrimarySelectionResolver {
             ) => Ok(None),
             Err(error) => Err(ResolveError::Platform(error.to_string())),
         }
+    }
+
+    /// Clear the PRIMARY selection so the source app drops its highlight
+    /// (ADR-46). This only clears PRIMARY, never the regular clipboard (ADR-5).
+    fn clear_current_selection(&self) -> Result<(), ResolveError> {
+        copy::clear(copy::ClipboardType::Primary, copy::Seat::All)
+            .map_err(|error| ResolveError::Platform(error.to_string()))
     }
 }
 

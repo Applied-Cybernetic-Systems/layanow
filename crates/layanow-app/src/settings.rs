@@ -57,8 +57,8 @@ pub struct Settings {
     pub quiz_parse: bool,
     /// Quiz mode: draw the captured options as `A.`, `B.`, … (ADR-45).
     pub quiz_option_letters: bool,
-    /// Quiz mode: clear the captured question and answers when `Enter` is
-    /// pressed (ADR-45).
+    /// Quiz mode: clear the captured question and answers, and the native
+    /// PRIMARY selection, when `Enter` is pressed (ADR-45/46).
     pub quiz_clear_on_enter: bool,
     /// Quiz mode: `Tab` while results are shown loads the next quiz (ADR-45).
     pub quiz_tab_next: bool,

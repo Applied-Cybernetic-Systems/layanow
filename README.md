@@ -34,9 +34,9 @@ Linux/Wayland, working end to end:
 - A **click-through** overlay that only grabs the keyboard while shown, with
   ranked results and probability colours (ADR-14/25/31).
 - Optional **quiz options** (ADR-44/45), each independent: parse a whole quiz
-  from one selection, draw options as `A.`/`B.`/…, clear the capture on `Enter`,
-  and `Tab` from the results loads the next quiz. Results can be listed in typed
-  order (default) or by probability.
+  from one selection, draw options as `A.`/`B.`/…, clear the native
+  (PRIMARY) highlight on `Enter`, and `Tab` from the results loads the next
+  quiz. Results can be listed in typed order (default) or by probability.
 
 Not yet: X11 and Windows/macOS selection backends, accessibility and OCR
 resolvers, and multi-answer support.

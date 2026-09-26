@@ -30,8 +30,9 @@ impl std::error::Error for ResolveError {}
 
 /// A source of text from the screen.
 ///
-/// Implementations must be side-effect free with respect to the clipboard
-/// (see ADR-5): they may read the selection buffer but must not overwrite it.
+/// Implementations must never touch the regular clipboard (ADR-5). They may read
+/// the selection buffer, and — for the opt-in "clear on `Enter`" action — clear
+/// the PRIMARY selection so the source app drops its highlight (ADR-46).
 ///
 /// There is deliberately no change-notification API: the data-control
 /// protocols expose none, and v1 capture is a manual `Tab`-commit (ADR-33).
@@ -46,6 +47,18 @@ pub trait TextResolver: Send + Sync {
 
     /// Read the app's current native text selection, if any.
     fn resolve_current_selection(&self) -> Result<Option<Selection>, ResolveError>;
+
+    /// Clear the current native selection so the source app un-highlights it.
+    ///
+    /// Used by the opt-in "clear on `Enter`" setting (ADR-46). Backends that
+    /// cannot clear keep the default no-op. This must never touch the regular
+    /// clipboard (ADR-5).
+    ///
+    /// # Errors
+    /// Returns a [`ResolveError`] when the platform call fails.
+    fn clear_current_selection(&self) -> Result<(), ResolveError> {
+        Ok(())
+    }
 }
 
 #[cfg(test)]
