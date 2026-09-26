@@ -110,20 +110,21 @@ impl SettingsApp {
     fn quiz_options(&mut self, ui: &mut egui::Ui) {
         ui.label("Quiz mode");
         ui.checkbox(&mut self.settings.quiz_parse, "Parse a whole quiz from one selection");
+        ui.small("Split the highlighted text into the question and its options (one per line).");
         ui.checkbox(&mut self.settings.quiz_option_letters, "Show captured options as A, B, C…");
+        ui.small("Label the answers A, B, C… instead of “Answer 1”, “Answer 2”.");
         ui.checkbox(
             &mut self.settings.quiz_clear_on_enter,
             "Clear the native highlight when Enter is pressed",
         );
+        ui.small("Deselect the text in the source app so the next question is easy to select.");
         ui.checkbox(&mut self.settings.quiz_tab_next, "Tab from the results loads the next quiz");
+        ui.small("Start the next quiz from the results without a dismiss click.");
         ui.checkbox(
             &mut self.settings.quiz_tab_decides,
             "Tab captures and decides at once (no Enter)",
         );
-        ui.small(
-            "Parsing splits the highlighted quiz into the question and one option per line, \
-             so the whole quiz is captured in one Tab.",
-        );
+        ui.small("Run the decision on capture; needs “Parse a whole quiz” above.");
     }
 
     /// The named-context editor (ADR-40): list, delete and add templates.
