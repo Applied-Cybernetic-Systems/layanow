@@ -73,6 +73,9 @@ pub struct Overlay {
     threshold: f32,
     /// Whether quiz mode parses a single whole-quiz selection (ADR-44).
     quiz_mode: bool,
+    /// The question of the decision whose results are shown, kept after the
+    /// session is cleared on `Enter` (ADR-44).
+    last_question: Option<String>,
     /// Probability-bar colour anchors from settings.
     palette: Palette,
     /// A short user-facing hint (e.g. "no selection") drawn while capturing.
@@ -125,6 +128,7 @@ impl Overlay {
             phase: Phase::Capturing,
             threshold: DEFAULT_CONFIDENCE_THRESHOLD,
             quiz_mode: false,
+            last_question: None,
             palette: Palette::default(),
             status: None,
             entry: String::new(),
@@ -394,9 +398,15 @@ impl Overlay {
         // cannot be mistaken for the current one.
         let id = self.next_request;
         self.next_request = self.next_request.wrapping_add(1);
+        self.last_question = Some(question.clone());
         self.phase = match self.worker.decide(id, self.context.clone(), question, answers) {
             Ok(()) => {
                 self.pending_request = Some(id);
+                if self.quiz_mode {
+                    // Un-highlight the captured quiz once it has been sent, so
+                    // the next `Tab` can capture the next question (ADR-44).
+                    self.session.clear();
+                }
                 Phase::Running
             }
             Err(error) => {
@@ -443,13 +453,20 @@ impl Overlay {
         self.context.clear();
         self.saving_name = None;
         self.selected_template = None;
+        self.last_question = None;
     }
 
-    /// Quiz mode: from the results, `Tab` clears the capture (un-highlights it)
-    /// and returns to the capture screen, so the user can highlight the next
-    /// question themselves (ADR-44).
+    /// Quiz mode: from the results, `Tab` captures the next quiz directly. The
+    /// previous capture was already cleared on `Enter`; the context is kept so
+    /// a shared passage survives (ADR-44).
     fn next_quiz(&mut self) {
-        self.dismiss();
+        self.phase = Phase::Capturing;
+        self.pending_request = None;
+        self.session.clear();
+        self.status = None;
+        self.entry.clear();
+        self.last_question = None;
+        self.capture_item();
     }
 
     /// Show or hide the overlay, clearing the session on any change.
@@ -626,7 +643,7 @@ impl Overlay {
                     theme::shadowed_text(ui, "Deciding…", theme::FG1, theme::BODY_SIZE);
                 }
                 Phase::Results(panel) => {
-                    let question = self.session.question_text().map(str::to_string);
+                    let question = self.last_question.clone();
                     ui.horizontal(|ui| {
                         ui.add_space(RESULTS_LEFT_MARGIN);
                         ui.vertical(|ui| {
@@ -1066,24 +1083,24 @@ mod tests {
     }
 
     #[test]
-    fn quiz_mode_tab_next_unhighlights_for_rehighlighting() {
+    fn enter_clears_the_capture_and_tab_starts_the_next_quiz() {
         let (mut overlay, resolver) = overlay();
         overlay.set_quiz_mode(true);
         resolver.set("Q1\nA\nB");
         overlay.capture_item();
         overlay.decide();
+        // Enter un-highlights the captured quiz as soon as it is sent.
+        assert!(overlay.session.is_empty());
         wait_for_reply(&mut overlay);
         assert!(matches!(overlay.phase, Phase::Results(_)));
+        assert_eq!(overlay.last_question.as_deref(), Some("Q1"));
 
-        // Tab from the results clears the capture, ready to be highlighted again.
+        // Tab from the results captures the next selection directly.
+        resolver.set("Q2\nC\nD");
         overlay.next_quiz();
         assert!(matches!(overlay.phase, Phase::Capturing));
-        assert!(overlay.session.is_empty());
-
-        // The question may be highlighted and captured again (even unchanged).
-        overlay.capture_item();
-        assert_eq!(overlay.session.question_text(), Some("Q1"));
-        assert_eq!(overlay.session.answer_texts(), ["A", "B"]);
+        assert_eq!(overlay.session.question_text(), Some("Q2"));
+        assert_eq!(overlay.session.answer_texts(), ["C", "D"]);
     }
 
     #[test]
