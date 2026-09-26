@@ -62,6 +62,10 @@ pub struct Settings {
     pub quiz_clear_on_enter: bool,
     /// Quiz mode: `Tab` while results are shown loads the next quiz (ADR-45).
     pub quiz_tab_next: bool,
+    /// Quiz mode: a capturing `Tab` runs the decision immediately, so a
+    /// question needs one key instead of `Tab` + `Enter` (ADR-47). Takes effect
+    /// with [`Self::quiz_parse`].
+    pub quiz_tab_decides: bool,
     /// Probability-bar colour anchors.
     pub palette: Palette,
     /// Named context templates, selectable in the overlay (ADR-40).
@@ -80,6 +84,7 @@ impl Default for Settings {
             quiz_option_letters: false,
             quiz_clear_on_enter: false,
             quiz_tab_next: false,
+            quiz_tab_decides: false,
             palette: Palette::default(),
             contexts: Vec::new(),
         }
@@ -173,6 +178,7 @@ mod tests {
         assert!(!parsed.quiz_option_letters);
         assert!(!parsed.quiz_clear_on_enter);
         assert!(!parsed.quiz_tab_next);
+        assert!(!parsed.quiz_tab_decides);
         assert_eq!(parsed.palette, Palette::default());
         assert!(parsed.contexts.is_empty());
     }
@@ -198,6 +204,7 @@ mod tests {
             quiz_option_letters: true,
             quiz_clear_on_enter: true,
             quiz_tab_next: true,
+            quiz_tab_decides: true,
             results_typed_order: false,
             ..Settings::default()
         };

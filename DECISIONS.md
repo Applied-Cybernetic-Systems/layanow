@@ -619,6 +619,8 @@ single `quiz_mode` (ADR-44):
   `Enter` sends the decision; the question is kept for the results header.
 - `quiz_tab_next` — `Tab` while results are shown loads the next quiz, capturing
   the current selection directly (Context is preserved).
+- `quiz_tab_decides` — a capturing `Tab` runs the decision immediately so a
+  question needs one key instead of `Tab` + `Enter` (ADR-47).
 - `results_typed_order` (**global**, default **on**) — list results in captured
   option order (`A`, `B`, …); off lists highest probability first.
 
@@ -650,3 +652,19 @@ the Wayland backend implements it). This is a deliberate, documented exception
 to "resolvers only read": it is opt-in, limited to PRIMARY, and never writes to
 the regular clipboard. A compositor without `ext-data-control` /
 `wlr-data-control` v2 logs a warning and continues.
+
+## ADR-47 — A capturing `Tab` can decide immediately
+**Decision:** A `quiz_tab_decides` setting (default off) makes a capturing `Tab`
+run the decision as soon as the whole quiz has been captured, removing the
+`Enter` press. It takes effect only with `quiz_parse` (ADR-44): without parsing,
+normal one-item capture would decide as soon as a single answer existed and cut
+off multi-answer input. With `quiz_tab_next` also on, the whole quiz works as one
+key per question — highlight → `Tab` (capture + decide) → results → highlight →
+`Tab` …
+**Why:** Asking the app a whole quiz is repetitive; `Tab` + `Enter` per question
+is unnecessary friction once the capture already produced a complete question
+and options.
+**Consequence:** `Settings` gains `quiz_tab_decides`; the overlay's capture path
+gains `capture_and_maybe_decide`, shared by the capturing `Tab` and `next_quiz`.
+`Enter` still decides manually, and is the only way when the option is off or
+`quiz_parse` is off.

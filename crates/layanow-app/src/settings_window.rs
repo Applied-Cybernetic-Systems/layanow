@@ -116,6 +116,10 @@ impl SettingsApp {
             "Clear the native highlight when Enter is pressed",
         );
         ui.checkbox(&mut self.settings.quiz_tab_next, "Tab from the results loads the next quiz");
+        ui.checkbox(
+            &mut self.settings.quiz_tab_decides,
+            "Tab captures and decides at once (no Enter)",
+        );
         ui.small(
             "Parsing splits the highlighted quiz into the question and one option per line, \
              so the whole quiz is captured in one Tab.",

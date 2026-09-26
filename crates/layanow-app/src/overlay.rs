@@ -80,6 +80,8 @@ pub struct Overlay {
     quiz_clear_on_enter: bool,
     /// Whether `Tab` from the results loads the next quiz (ADR-45).
     quiz_tab_next: bool,
+    /// Whether a capturing `Tab` runs the decision immediately (ADR-47).
+    quiz_tab_decides: bool,
     /// Whether results are listed in captured order rather than by probability
     /// (ADR-45).
     results_typed_order: bool,
@@ -141,6 +143,7 @@ impl Overlay {
             quiz_option_letters: false,
             quiz_clear_on_enter: false,
             quiz_tab_next: false,
+            quiz_tab_decides: false,
             results_typed_order: true,
             last_question: None,
             palette: Palette::default(),
@@ -168,6 +171,7 @@ impl Overlay {
         self.quiz_option_letters = settings.quiz_option_letters;
         self.quiz_clear_on_enter = settings.quiz_clear_on_enter;
         self.quiz_tab_next = settings.quiz_tab_next;
+        self.quiz_tab_decides = settings.quiz_tab_decides;
         self.results_typed_order = settings.results_typed_order;
         self.palette = settings.palette;
         self.contexts.clone_from(&settings.contexts);
@@ -228,6 +232,16 @@ impl Overlay {
                 tracing::warn!(%error, "selection resolver failed");
                 self.status = Some(format!("selection error: {error}"));
             }
+        }
+    }
+
+    /// Capture on `Tab`, then — with `quiz_tab_decides` — run the decision
+    /// immediately (ADR-47), so a question needs one key instead of `Tab` +
+    /// `Enter`. Only meaningful for a parsed whole-quiz capture.
+    fn capture_and_maybe_decide(&mut self) {
+        self.capture_item();
+        if self.quiz_tab_decides && self.quiz_parse && self.session.is_ready() {
+            self.decide();
         }
     }
 
@@ -483,7 +497,7 @@ impl Overlay {
         self.status = None;
         self.entry.clear();
         self.last_question = None;
-        self.capture_item();
+        self.capture_and_maybe_decide();
     }
 
     /// Show or hide the overlay, clearing the session on any change.
@@ -729,7 +743,7 @@ impl OverlayApp for Overlay {
 
         if matches!(self.phase, Phase::Capturing) {
             if ctx.input_mut(|input| input.consume_key(egui::Modifiers::NONE, egui::Key::Tab)) {
-                self.capture_item();
+                self.capture_and_maybe_decide();
             }
             if ctx.input(|input| input.key_pressed(egui::Key::Enter)) {
                 self.decide();
@@ -1153,6 +1167,51 @@ mod tests {
         assert_eq!(overlay.last_question.as_deref(), Some("Q1"));
         // The native selection is cleared so the source app un-highlights.
         assert_eq!(resolver.clears(), 1);
+    }
+
+    #[test]
+    fn tab_decides_captures_and_runs_the_decision_in_one_step() {
+        let (mut overlay, resolver) = overlay();
+        overlay.quiz_parse = true;
+        overlay.quiz_tab_decides = true;
+        resolver.set("Q1\nA\nB");
+        overlay.capture_and_maybe_decide();
+        assert!(matches!(overlay.phase, Phase::Running));
+        wait_for_reply(&mut overlay);
+        assert!(matches!(overlay.phase, Phase::Results(_)));
+    }
+
+    #[test]
+    fn tab_decides_requires_parse() {
+        let (mut overlay, resolver) = overlay();
+        overlay.quiz_tab_decides = true;
+        // Without `quiz_parse` the capture is a single item, never ready, so no
+        // decision is run behind the user's back.
+        resolver.set("Q1\nA\nB");
+        overlay.capture_and_maybe_decide();
+        assert!(matches!(overlay.phase, Phase::Capturing));
+    }
+
+    #[test]
+    fn tab_next_decides_when_both_options_are_on() {
+        let (mut overlay, resolver) = overlay();
+        overlay.quiz_parse = true;
+        overlay.quiz_tab_decides = true;
+        overlay.quiz_tab_next = true;
+        resolver.set("Q1\nA\nB");
+        overlay.capture_and_maybe_decide();
+        wait_for_reply(&mut overlay);
+        assert!(matches!(overlay.phase, Phase::Results(_)));
+
+        // One Tab from the results captures the next quiz and decides it.
+        resolver.set("Q2\nC\nD");
+        overlay.next_quiz();
+        assert!(matches!(overlay.phase, Phase::Running));
+        wait_for_reply(&mut overlay);
+        let Phase::Results(panel) = &overlay.phase else {
+            panic!("expected results");
+        };
+        assert_eq!(panel.rows[0].text, "C");
     }
 
     #[test]
