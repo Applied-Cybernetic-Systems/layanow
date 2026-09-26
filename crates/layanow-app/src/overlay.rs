@@ -267,8 +267,13 @@ impl Overlay {
     }
 
     /// Split `text` into the quiz question and its options and store them.
-    /// Records the raw text so the next `Tab` can spot an unchanged selection.
+    /// Records the raw text so the same selection cannot be captured twice.
     fn store_quiz(&mut self, text: &str, source: Source) {
+        if self.last_quiz.as_deref() == Some(text) {
+            self.status =
+                Some("same selection as the last quiz — highlight the next one".to_string());
+            return;
+        }
         match layanow_core::parse_quiz(text) {
             Some((question, options)) => {
                 tracing::debug!(options = options.len(), "captured quiz");
@@ -438,8 +443,9 @@ impl Overlay {
         }
     }
 
-    /// Clear everything and return to capturing (`Esc`, or a click on results).
-    fn dismiss(&mut self) {
+    /// Clear the captured session and return to capturing, keeping the last
+    /// quiz so quiz mode's `Tab`-next can refuse an unchanged selection.
+    fn reset_session(&mut self) {
         self.phase = Phase::Capturing;
         self.pending_request = None;
         self.session.clear();
@@ -448,45 +454,23 @@ impl Overlay {
         self.context.clear();
         self.saving_name = None;
         self.selected_template = None;
+    }
+
+    /// Clear everything and return to capturing (`Esc`, or a click on results).
+    fn dismiss(&mut self) {
+        self.reset_session();
         self.last_quiz = None;
     }
 
-    /// Quiz mode: from the results, start the next quiz in one step — dismiss
-    /// the current results and capture the next selection (ADR-44).
-    /// Quiz mode: from the results, start the next quiz in one step — dismiss
-    /// the current results and capture the next selection (ADR-44).
+    /// Quiz mode: from the results, `Tab` returns to the capture screen so the
+    /// next quiz can be selected and captured (ADR-44).
     ///
-    /// The current selection is compared with the last quiz first: an unchanged
-    /// selection keeps the results and only reports that nothing changed, so a
-    /// stray `Tab` cannot silently re-run the same quiz.
+    /// It deliberately does not read or re-capture the current selection: the
+    /// PRIMARY buffer can lag the on-screen text, so the next quiz must be an
+    /// explicit selection. The last quiz is kept so capturing it again is
+    /// reported rather than silently re-run.
     fn next_quiz(&mut self) {
-        let typed = self.entry.trim().to_string();
-        let current = if typed.is_empty() {
-            match self.resolver.resolve_current_selection() {
-                Ok(Some(selection)) => Some((selection.text, selection.source)),
-                Ok(None) => None,
-                Err(error) => {
-                    tracing::warn!(%error, "selection resolver failed");
-                    None
-                }
-            }
-        } else {
-            Some((typed, Source::Manual))
-        };
-        let Some((text, source)) = current else {
-            self.status = Some("no new selection — highlight the next quiz".to_string());
-            return;
-        };
-        if self.last_quiz.as_deref() == Some(text.as_str()) {
-            self.status =
-                Some("same selection as the last quiz — highlight the next one".to_string());
-            return;
-        }
-        if self.try_capture_files(&text) {
-            return;
-        }
-        self.dismiss();
-        self.store_quiz(&text, source);
+        self.reset_session();
     }
 
     /// Show or hide the overlay, clearing the session on any change.
@@ -679,9 +663,6 @@ impl Overlay {
                                 ui.add_space(6.0);
                             }
                             Self::draw_results(ui, panel);
-                            if let Some(status) = &self.status {
-                                theme::shadowed_text(ui, status, theme::YELLOW, theme::BODY_SIZE);
-                            }
                             ui.add_space(8.0);
                             let hint = if self.quiz_mode {
                                 "Tab: next quiz · click: dismiss · Esc: hide"
@@ -1106,7 +1087,7 @@ mod tests {
     }
 
     #[test]
-    fn quiz_mode_starts_the_next_quiz_from_the_results() {
+    fn quiz_mode_tab_next_resets_for_the_next_quiz() {
         let (mut overlay, resolver) = overlay();
         overlay.set_quiz_mode(true);
         resolver.set("Q1\nA\nB");
@@ -1115,28 +1096,38 @@ mod tests {
         wait_for_reply(&mut overlay);
         assert!(matches!(overlay.phase, Phase::Results(_)));
 
-        // Pressing Tab from the results dismisses and captures the next quiz.
-        resolver.set("Q2\nC\nD");
+        // Tab from the results returns to the capture screen without capturing
+        // the (possibly stale) current selection.
         overlay.next_quiz();
         assert!(matches!(overlay.phase, Phase::Capturing));
+        assert!(overlay.session.is_empty());
+
+        // Re-capturing the same selection is refused.
+        overlay.capture_item();
+        assert!(overlay.session.is_empty());
+        assert!(overlay.status.is_some());
+
+        // A different selection is captured.
+        resolver.set("Q2\nC\nD");
+        overlay.capture_item();
         assert_eq!(overlay.session.question_text(), Some("Q2"));
         assert_eq!(overlay.session.answer_texts(), ["C", "D"]);
     }
 
     #[test]
-    fn quiz_mode_next_ignores_an_unchanged_selection() {
+    fn a_manual_dismiss_allows_recapturing_the_same_quiz() {
         let (mut overlay, resolver) = overlay();
         overlay.set_quiz_mode(true);
         resolver.set("Q1\nA\nB");
         overlay.capture_item();
         overlay.decide();
         wait_for_reply(&mut overlay);
-        assert!(matches!(overlay.phase, Phase::Results(_)));
 
-        // The selection has not changed: keep the results and report it.
-        overlay.next_quiz();
-        assert!(matches!(overlay.phase, Phase::Results(_)));
-        assert!(overlay.status.is_some());
+        // A dismiss click/Esc clears the last quiz, so it may be captured again.
+        overlay.dismiss();
+        overlay.capture_item();
+        assert_eq!(overlay.session.question_text(), Some("Q1"));
+        assert_eq!(overlay.session.answer_texts(), ["A", "B"]);
     }
 
     #[test]
