@@ -35,9 +35,9 @@ Linux/Wayland, working end to end:
   ranked results and probability colours (ADR-14/25/31).
 - Optional **quiz options** (ADR-44/45/47), each independent: parse a whole quiz
   from one selection, draw options as `A.`/`B.`/…, clear the native
-  (PRIMARY) highlight on `Enter`, have `Tab` from the results load the next
-  quiz, and have `Tab` decide at once (no `Enter`). Results can be listed in
-  typed order (default) or by probability.
+  (PRIMARY) highlight when a decision is made, have `Tab` from the results load
+  the next quiz, and have `Tab` decide at once (no `Enter`). Results can be
+  listed in typed order (default) or by probability.
 
 Not yet: X11 and Windows/macOS selection backends, accessibility and OCR
 resolvers, and multi-answer support.

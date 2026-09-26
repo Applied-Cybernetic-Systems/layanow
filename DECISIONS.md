@@ -615,8 +615,9 @@ single `quiz_mode` (ADR-44):
 - `quiz_option_letters` — draw the captured options as `A.`, `B.`, … instead of
   `Answer 1:`.
 - `quiz_clear_on_enter` — clear the captured question and answers, **and the
-  native PRIMARY selection** (so the source app un-highlights), as soon as
-  `Enter` sends the decision; the question is kept for the results header.
+  native PRIMARY selection** (so the source app un-highlights), as soon as a
+  decision is sent (`Enter`, or `Tab` with `quiz_tab_decides`); the question is
+  kept for the results header.
 - `quiz_tab_next` — `Tab` while results are shown loads the next quiz, capturing
   the current selection directly (Context is preserved).
 - `quiz_tab_decides` — a capturing `Tab` runs the decision immediately so a

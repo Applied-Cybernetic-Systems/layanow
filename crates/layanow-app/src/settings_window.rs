@@ -115,7 +115,7 @@ impl SettingsApp {
         ui.small("Label the answers A, B, C… instead of “Answer 1”, “Answer 2”.");
         ui.checkbox(
             &mut self.settings.quiz_clear_on_enter,
-            "Clear the native highlight when Enter is pressed",
+            "Clear the native highlight when a decision is made",
         );
         ui.small("Deselect the text in the source app so the next question is easy to select.");
         ui.checkbox(&mut self.settings.quiz_tab_next, "Tab from the results loads the next quiz");
