@@ -91,15 +91,34 @@ impl SettingsApp {
         }
     }
 
-    /// The quiz-mode checkbox and its explanation (ADR-44).
-    fn quiz_mode(&mut self, ui: &mut egui::Ui) {
-        ui.checkbox(
-            &mut self.settings.quiz_mode,
-            "Quiz mode — capture the whole quiz in one selection",
+    /// Hot vs on-demand model residency radios (ADR-11).
+    fn model_residency(&mut self, ui: &mut egui::Ui) {
+        ui.label("Model residency");
+        ui.radio_value(
+            &mut self.settings.unload,
+            UnloadPolicy::Hot,
+            "Hot — keep the model ready (instant answers, ~2 GB idle)",
         );
+        ui.radio_value(
+            &mut self.settings.unload,
+            UnloadPolicy::OnDemand,
+            "On demand — unload after each decision (slower next answer)",
+        );
+    }
+
+    /// The quiz options (ADR-45): each behaviour is an independent toggle.
+    fn quiz_options(&mut self, ui: &mut egui::Ui) {
+        ui.label("Quiz mode");
+        ui.checkbox(&mut self.settings.quiz_parse, "Parse a whole quiz from one selection");
+        ui.checkbox(&mut self.settings.quiz_option_letters, "Show captured options as A, B, C…");
+        ui.checkbox(
+            &mut self.settings.quiz_clear_on_enter,
+            "Clear the captured highlight when Enter is pressed",
+        );
+        ui.checkbox(&mut self.settings.quiz_tab_next, "Tab from the results loads the next quiz");
         ui.small(
-            "Highlight the whole quiz (question then options) once. A blank line separates \
-             the question from its options; every line after it is one option (A, B, C…).",
+            "Parsing splits the highlighted quiz into the question and one option per line, \
+             so the whole quiz is captured in one Tab.",
         );
     }
 
@@ -215,20 +234,17 @@ impl eframe::App for SettingsApp {
                 .on_hover_text("Below this, the decision is flagged — it is never refused.");
 
                 ui.add_space(10.0);
-                ui.label("Model residency");
-                ui.radio_value(
-                    &mut self.settings.unload,
-                    UnloadPolicy::Hot,
-                    "Hot — keep the model ready (instant answers, ~2 GB idle)",
-                );
-                ui.radio_value(
-                    &mut self.settings.unload,
-                    UnloadPolicy::OnDemand,
-                    "On demand — unload after each decision (slower next answer)",
-                );
+                self.model_residency(ui);
 
                 ui.add_space(10.0);
-                self.quiz_mode(ui);
+                self.quiz_options(ui);
+
+                ui.add_space(10.0);
+                ui.checkbox(
+                    &mut self.settings.results_typed_order,
+                    "Results in typed order (A, B, C…)",
+                );
+                ui.small("Off: highest probability first.");
 
                 ui.add_space(10.0);
                 ui.label("Probability colours");

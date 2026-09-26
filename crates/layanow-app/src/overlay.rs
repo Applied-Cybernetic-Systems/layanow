@@ -71,8 +71,18 @@ pub struct Overlay {
     commands: Receiver<Command>,
     phase: Phase,
     threshold: f32,
-    /// Whether quiz mode parses a single whole-quiz selection (ADR-44).
-    quiz_mode: bool,
+    /// Whether a whole-quiz selection is parsed into question + options
+    /// (ADR-45).
+    quiz_parse: bool,
+    /// Whether captured options are drawn as `A.`, `B.`, … (ADR-45).
+    quiz_option_letters: bool,
+    /// Whether `Enter` clears the captured question and answers (ADR-45).
+    quiz_clear_on_enter: bool,
+    /// Whether `Tab` from the results loads the next quiz (ADR-45).
+    quiz_tab_next: bool,
+    /// Whether results are listed in captured order rather than by probability
+    /// (ADR-45).
+    results_typed_order: bool,
     /// The question of the decision whose results are shown, kept after the
     /// session is cleared on `Enter` (ADR-44).
     last_question: Option<String>,
@@ -127,7 +137,11 @@ impl Overlay {
             commands,
             phase: Phase::Capturing,
             threshold: DEFAULT_CONFIDENCE_THRESHOLD,
-            quiz_mode: false,
+            quiz_parse: false,
+            quiz_option_letters: false,
+            quiz_clear_on_enter: false,
+            quiz_tab_next: false,
+            results_typed_order: true,
             last_question: None,
             palette: Palette::default(),
             status: None,
@@ -147,15 +161,16 @@ impl Overlay {
         }
     }
 
-    /// Override the low-confidence threshold (from settings).
-    pub fn set_threshold(&mut self, threshold: f32) {
-        self.threshold = threshold;
-    }
-
-    /// Set quiz mode (from settings): a single selection is split into the
-    /// question and its options (ADR-44).
-    pub fn set_quiz_mode(&mut self, quiz_mode: bool) {
-        self.quiz_mode = quiz_mode;
+    /// Apply settings loaded from disk (startup and `Reload`).
+    pub fn set_settings(&mut self, settings: &Settings) {
+        self.threshold = settings.confidence_threshold;
+        self.quiz_parse = settings.quiz_parse;
+        self.quiz_option_letters = settings.quiz_option_letters;
+        self.quiz_clear_on_enter = settings.quiz_clear_on_enter;
+        self.quiz_tab_next = settings.quiz_tab_next;
+        self.results_typed_order = settings.results_typed_order;
+        self.palette = settings.palette;
+        self.contexts.clone_from(&settings.contexts);
     }
 
     /// Re-read the settings file and apply it live: the
@@ -163,10 +178,7 @@ impl Overlay {
     /// checkpoint and unload policy.
     fn apply_settings(&mut self) {
         let settings = Settings::load();
-        self.threshold = settings.confidence_threshold;
-        self.quiz_mode = settings.quiz_mode;
-        self.palette = settings.palette;
-        self.contexts = settings.contexts;
+        self.set_settings(&settings);
         let on_demand = settings.unload == UnloadPolicy::OnDemand;
         if let Err(error) = self.worker.configure(settings.checkpoint, settings.quant, on_demand) {
             tracing::warn!(%error, "could not apply settings");
@@ -180,7 +192,7 @@ impl Overlay {
     /// repeat of the most recent item is ignored so a double-tap does not add
     /// the same text twice.
     fn capture_item(&mut self) {
-        if self.quiz_mode {
+        if self.quiz_parse {
             self.capture_quiz();
             return;
         }
@@ -402,9 +414,9 @@ impl Overlay {
         self.phase = match self.worker.decide(id, self.context.clone(), question, answers) {
             Ok(()) => {
                 self.pending_request = Some(id);
-                if self.quiz_mode {
+                if self.quiz_clear_on_enter {
                     // Un-highlight the captured quiz once it has been sent, so
-                    // the next `Tab` can capture the next question (ADR-44).
+                    // the next `Tab` can capture the next question (ADR-45).
                     self.session.clear();
                 }
                 Phase::Running
@@ -436,6 +448,7 @@ impl Overlay {
                     &ranked,
                     self.threshold,
                     &self.palette,
+                    self.results_typed_order,
                 ))),
                 Response::Failed { error, .. } => Phase::Error(error),
             };
@@ -573,7 +586,7 @@ impl Overlay {
         ui.add_space(12.0);
         let response = ui.add(
             egui::TextEdit::singleline(&mut self.entry)
-                .hint_text(if self.quiz_mode {
+                .hint_text(if self.quiz_parse {
                     "type the whole quiz — or highlight it — then press Tab"
                 } else {
                     "type an item — or highlight text — then press Tab"
@@ -588,7 +601,7 @@ impl Overlay {
         if let Some(status) = &self.status {
             theme::shadowed_text(ui, status, theme::YELLOW, theme::BODY_SIZE);
         }
-        let hint = if self.quiz_mode {
+        let hint = if self.quiz_parse {
             "Tab: load the whole quiz · Enter: decide · Esc: hide"
         } else {
             "Tab: add · Enter: decide · Esc: hide"
@@ -596,8 +609,8 @@ impl Overlay {
         theme::shadowed_text(ui, hint, theme::FG4, theme::BODY_SIZE);
     }
 
-    /// Draw the captured question and answers. In quiz mode the answers are
-    /// lettered (`A.`, `B.`, …) to match the model's option labels (ADR-44).
+    /// Draw the captured question and answers. The answers are lettered (`A.`,
+    /// `B.`, …) when the option-letter setting is on (ADR-45).
     fn draw_items(&self, ui: &mut egui::Ui) {
         if let Some(question) = self.session.question() {
             theme::shadowed_labelled_text(
@@ -608,7 +621,7 @@ impl Overlay {
                 theme::BLUE,
                 theme::BODY_SIZE,
             );
-        } else if self.quiz_mode {
+        } else if self.quiz_parse {
             theme::shadowed_text(
                 ui,
                 "Highlight the whole quiz (question then options)…",
@@ -619,7 +632,7 @@ impl Overlay {
             theme::shadowed_text(ui, "Highlight the question text…", theme::FG4, theme::BODY_SIZE);
         }
         for (index, answer) in self.session.answers().iter().enumerate() {
-            let label = if self.quiz_mode {
+            let label = if self.quiz_option_letters {
                 format!("{}. {}", layanow_model::render::option_label(index), answer.selection.text)
             } else {
                 format!("Answer {}: {}", index + 1, answer.selection.text)
@@ -660,7 +673,7 @@ impl Overlay {
                             }
                             Self::draw_results(ui, panel);
                             ui.add_space(8.0);
-                            let hint = if self.quiz_mode {
+                            let hint = if self.quiz_tab_next {
                                 "Tab: next quiz · click: dismiss · Esc: hide"
                             } else {
                                 "click: dismiss · Esc: hide"
@@ -720,7 +733,7 @@ impl OverlayApp for Overlay {
         }
         // Quiz mode: from the results, `Tab` starts the next quiz in one press,
         // so a whole quiz can be worked through without a dismiss click.
-        if self.quiz_mode
+        if self.quiz_tab_next
             && matches!(self.phase, Phase::Results(_))
             && ctx.input_mut(|input| input.consume_key(egui::Modifiers::NONE, egui::Key::Tab))
         {
@@ -960,6 +973,14 @@ mod tests {
         overlay_with(FirstWins)
     }
 
+    /// Enable every quiz option, matching the old single `quiz_mode` flag.
+    fn quiz_options(overlay: &mut Overlay) {
+        overlay.quiz_parse = true;
+        overlay.quiz_option_letters = true;
+        overlay.quiz_clear_on_enter = true;
+        overlay.quiz_tab_next = true;
+    }
+
     #[test]
     fn overlay_starts_hidden() {
         let (overlay, _commands) = controlled();
@@ -1024,9 +1045,9 @@ mod tests {
     }
 
     #[test]
-    fn quiz_mode_splits_one_selection_into_question_and_options() {
+    fn quiz_parse_splits_one_selection_into_question_and_options() {
         let (mut overlay, resolver) = overlay();
-        overlay.set_quiz_mode(true);
+        quiz_options(&mut overlay);
         resolver.set("All taxes should be abolished.\nStrongly Agree\nAgree\nDisagree");
         overlay.capture_item();
         assert_eq!(overlay.session.question_text(), Some("All taxes should be abolished."));
@@ -1035,9 +1056,9 @@ mod tests {
     }
 
     #[test]
-    fn quiz_mode_parses_blank_line_separated_options() {
+    fn quiz_parse_parses_blank_line_separated_options() {
         let (mut overlay, resolver) = overlay();
-        overlay.set_quiz_mode(true);
+        quiz_options(&mut overlay);
         resolver.set("Which stakeholder is external?\n\nThe design team\n\nThe dean");
         overlay.capture_item();
         assert_eq!(overlay.session.question_text(), Some("Which stakeholder is external?"));
@@ -1045,9 +1066,9 @@ mod tests {
     }
 
     #[test]
-    fn quiz_mode_splits_a_likert_block_into_one_option_per_line() {
+    fn quiz_parse_splits_a_likert_block_into_one_option_per_line() {
         let (mut overlay, resolver) = overlay();
-        overlay.set_quiz_mode(true);
+        quiz_options(&mut overlay);
         resolver.set(
             "Publicly owned research institutions should receive more funding.\n\n\
              Strongly Agree\nAgree\nNeutral / Not Sure\nDisagree\nStrongly Disagree",
@@ -1064,9 +1085,9 @@ mod tests {
     }
 
     #[test]
-    fn quiz_mode_is_all_or_nothing() {
+    fn quiz_parse_is_all_or_nothing() {
         let (mut overlay, resolver) = overlay();
-        overlay.set_quiz_mode(true);
+        quiz_options(&mut overlay);
         // A single line is not a quiz: nothing is captured.
         resolver.set("just a line");
         overlay.capture_item();
@@ -1085,7 +1106,7 @@ mod tests {
     #[test]
     fn enter_clears_the_capture_and_tab_starts_the_next_quiz() {
         let (mut overlay, resolver) = overlay();
-        overlay.set_quiz_mode(true);
+        quiz_options(&mut overlay);
         resolver.set("Q1\nA\nB");
         overlay.capture_item();
         overlay.decide();
@@ -1101,6 +1122,21 @@ mod tests {
         assert!(matches!(overlay.phase, Phase::Capturing));
         assert_eq!(overlay.session.question_text(), Some("Q2"));
         assert_eq!(overlay.session.answer_texts(), ["C", "D"]);
+    }
+
+    #[test]
+    fn clear_on_enter_is_independent_of_parse() {
+        let (mut overlay, resolver) = overlay();
+        overlay.quiz_clear_on_enter = true;
+        // Normal one-item-at-a-time capture still applies without `quiz_parse`.
+        for text in ["Q1", "A", "B"] {
+            resolver.set(text);
+            overlay.capture_item();
+        }
+        assert_eq!(overlay.session.question_text(), Some("Q1"));
+        overlay.decide();
+        assert!(overlay.session.is_empty());
+        assert_eq!(overlay.last_question.as_deref(), Some("Q1"));
     }
 
     #[test]

@@ -65,11 +65,17 @@ pub struct Results {
 /// Build the results panel from ranked answers, colouring each row with
 /// `palette`.
 ///
-/// Rows are ordered by the captured option order (`A`, `B`, …), not by
-/// probability, so they line up with how the quiz was typed; the
+/// When `typed_order` is true the rows are ordered by the captured option order
+/// (`A`, `B`, …) so they line up with how the quiz was typed; when false the
+/// input order (highest probability first) is kept. Either way the
 /// highest-probability row is flagged [`ResultRow::is_top`].
 #[must_use]
-pub fn results(ranked: &[RankedAnswer], threshold: f32, palette: &Palette) -> Results {
+pub fn results(
+    ranked: &[RankedAnswer],
+    threshold: f32,
+    palette: &Palette,
+    typed_order: bool,
+) -> Results {
     let confidence = ranked.first().map_or(0.0, |answer| answer.confidence);
     // The first maximum wins ties, so the earliest option is highlighted.
     let top_index = ranked
@@ -80,7 +86,9 @@ pub fn results(ranked: &[RankedAnswer], threshold: f32, palette: &Palette) -> Re
         })
         .map(|answer| answer.index);
     let mut ordered: Vec<&RankedAnswer> = ranked.iter().collect();
-    ordered.sort_by_key(|answer| answer.index);
+    if typed_order {
+        ordered.sort_by_key(|answer| answer.index);
+    }
     let rows = ordered
         .into_iter()
         .map(|answer| ResultRow {
@@ -134,7 +142,7 @@ mod tests {
             answer(0, "Venus", 0.25, 0.4),
             answer(2, "Jupiter", 0.15, 0.4),
         ];
-        let panel = results(&ranked, DEFAULT_CONFIDENCE_THRESHOLD, &Palette::default());
+        let panel = results(&ranked, DEFAULT_CONFIDENCE_THRESHOLD, &Palette::default(), true);
         assert_eq!(panel.rows.len(), 3);
         // A, B, C in captured order regardless of probability.
         assert_eq!(panel.rows[0].label, "A");
@@ -149,9 +157,24 @@ mod tests {
     }
 
     #[test]
+    fn probability_order_keeps_the_ranked_input_order() {
+        let ranked = vec![
+            answer(1, "Mars", 0.6, 0.4),
+            answer(0, "Venus", 0.25, 0.4),
+            answer(2, "Jupiter", 0.15, 0.4),
+        ];
+        let panel = results(&ranked, DEFAULT_CONFIDENCE_THRESHOLD, &Palette::default(), false);
+        assert_eq!(panel.rows[0].text, "Mars");
+        assert!(panel.rows[0].is_top);
+        assert_eq!(panel.rows[0].label, "B");
+        assert_eq!(panel.rows[1].text, "Venus");
+        assert_eq!(panel.rows[2].text, "Jupiter");
+    }
+
+    #[test]
     fn high_confidence_is_not_flagged() {
         let ranked = vec![answer(0, "yes", 0.9, 0.7)];
-        let panel = results(&ranked, DEFAULT_CONFIDENCE_THRESHOLD, &Palette::default());
+        let panel = results(&ranked, DEFAULT_CONFIDENCE_THRESHOLD, &Palette::default(), true);
         assert!(!panel.low_confidence);
     }
 

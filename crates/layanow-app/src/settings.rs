@@ -32,6 +32,9 @@ pub struct NamedContext {
 }
 
 /// The persisted configuration.
+// Settings is a flat config bag; independent booleans are clearer here than a
+// bespoke enum per option.
+#[allow(clippy::struct_excessive_bools)]
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct Settings {
@@ -44,11 +47,21 @@ pub struct Settings {
     /// Confidence below which a decision is flagged as low-confidence
     /// (ADR-27 C2). The app never refuses to answer.
     pub confidence_threshold: f32,
+    /// List results in captured option order (`A`, `B`, …) rather than by
+    /// probability (ADR-45). The default is typed order.
+    pub results_typed_order: bool,
     /// Hot vs on-demand model residency (ADR-11).
     pub unload: UnloadPolicy,
-    /// Quiz mode: capture a whole quiz in a single selection and split it into
-    /// the question and its options (ADR-44).
-    pub quiz_mode: bool,
+    /// Quiz mode: split a whole-quiz selection into the question and its
+    /// options (ADR-44/45).
+    pub quiz_parse: bool,
+    /// Quiz mode: draw the captured options as `A.`, `B.`, … (ADR-45).
+    pub quiz_option_letters: bool,
+    /// Quiz mode: clear the captured question and answers when `Enter` is
+    /// pressed (ADR-45).
+    pub quiz_clear_on_enter: bool,
+    /// Quiz mode: `Tab` while results are shown loads the next quiz (ADR-45).
+    pub quiz_tab_next: bool,
     /// Probability-bar colour anchors.
     pub palette: Palette,
     /// Named context templates, selectable in the overlay (ADR-40).
@@ -61,8 +74,12 @@ impl Default for Settings {
             checkpoint: layanow_model::bundle::DEFAULT_ID.to_string(),
             quant: Quant::Fp32,
             confidence_threshold: DEFAULT_CONFIDENCE_THRESHOLD,
+            results_typed_order: true,
             unload: UnloadPolicy::Hot,
-            quiz_mode: false,
+            quiz_parse: false,
+            quiz_option_letters: false,
+            quiz_clear_on_enter: false,
+            quiz_tab_next: false,
             palette: Palette::default(),
             contexts: Vec::new(),
         }
@@ -91,13 +108,27 @@ impl Settings {
         let Ok(text) = std::fs::read_to_string(&path) else {
             return Self::default();
         };
-        match toml::from_str(&text) {
+        match Self::parse(&text) {
             Ok(settings) => settings,
             Err(error) => {
                 tracing::warn!(path = %path.display(), %error, "invalid settings; using defaults");
                 Self::default()
             }
         }
+    }
+
+    /// Parse a config, migrating the pre-ADR-45 `quiz_mode` flag into the split
+    /// quiz options.
+    fn parse(text: &str) -> Result<Self, toml::de::Error> {
+        let mut settings: Self = toml::from_str(text)?;
+        let legacy: LegacyQuizMode = toml::from_str(text).unwrap_or_default();
+        if legacy.quiz_mode == Some(true) {
+            settings.quiz_parse = true;
+            settings.quiz_option_letters = true;
+            settings.quiz_clear_on_enter = true;
+            settings.quiz_tab_next = true;
+        }
+        Ok(settings)
     }
 
     /// Write the settings, creating the config directory if needed.
@@ -116,6 +147,13 @@ impl Settings {
     }
 }
 
+/// The pre-ADR-45 single quiz toggle, read only to migrate old config files.
+#[derive(Deserialize, Default)]
+struct LegacyQuizMode {
+    #[serde(default)]
+    quiz_mode: Option<bool>,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -130,7 +168,11 @@ mod tests {
         assert_eq!(parsed.quant, Quant::Fp32);
         assert!((parsed.confidence_threshold - DEFAULT_CONFIDENCE_THRESHOLD).abs() < f32::EPSILON);
         assert_eq!(parsed.unload, UnloadPolicy::Hot);
-        assert!(!parsed.quiz_mode);
+        assert!(parsed.results_typed_order);
+        assert!(!parsed.quiz_parse);
+        assert!(!parsed.quiz_option_letters);
+        assert!(!parsed.quiz_clear_on_enter);
+        assert!(!parsed.quiz_tab_next);
         assert_eq!(parsed.palette, Palette::default());
         assert!(parsed.contexts.is_empty());
     }
@@ -143,17 +185,42 @@ mod tests {
         assert_eq!(parsed.quant, Quant::Fp32);
         assert!((parsed.confidence_threshold - 0.7).abs() < f32::EPSILON);
         assert_eq!(parsed.unload, UnloadPolicy::OnDemand);
-        assert!(!parsed.quiz_mode);
+        assert!(parsed.results_typed_order);
+        assert!(!parsed.quiz_parse);
         assert_eq!(parsed.palette, Palette::default());
         assert!(parsed.contexts.is_empty());
     }
 
     #[test]
-    fn quiz_mode_round_trips_through_toml() {
-        let settings = Settings { quiz_mode: true, ..Settings::default() };
+    fn quiz_options_round_trip_through_toml() {
+        let settings = Settings {
+            quiz_parse: true,
+            quiz_option_letters: true,
+            quiz_clear_on_enter: true,
+            quiz_tab_next: true,
+            results_typed_order: false,
+            ..Settings::default()
+        };
         let text = toml::to_string_pretty(&settings).expect("serialize");
         let parsed: Settings = toml::from_str(&text).expect("parse");
-        assert!(parsed.quiz_mode);
+        assert_eq!(parsed, settings);
+        assert!(!parsed.results_typed_order);
+    }
+
+    #[test]
+    fn legacy_quiz_mode_enables_every_quiz_option() {
+        let parsed = Settings::parse("quiz_mode = true\n").expect("parse");
+        assert!(parsed.quiz_parse);
+        assert!(parsed.quiz_option_letters);
+        assert!(parsed.quiz_clear_on_enter);
+        assert!(parsed.quiz_tab_next);
+    }
+
+    #[test]
+    fn absent_legacy_quiz_mode_leaves_the_options_off() {
+        let parsed = Settings::parse("quiz_mode = false\n").expect("parse");
+        assert!(!parsed.quiz_parse);
+        assert!(parsed.results_typed_order);
     }
 
     #[test]

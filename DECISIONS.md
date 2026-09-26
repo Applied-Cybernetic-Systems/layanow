@@ -587,29 +587,48 @@ Ubuntu-font-1.0 fonts) when distributing binaries. Contributions are accepted
 under MIT unless stated otherwise.
 
 ## ADR-44 — Quiz mode: single-selection quiz capture
-**Decision:** A `quiz_mode` setting (default off) lets the user capture a whole
+**Decision:** A `quiz_parse` setting (default off) lets the user capture a whole
 quiz — the question/statement and its answer options — in **one** selection.
 The captured text is split so that the question is the first
 blank-line-separated block (so a wrapped question survives) and every non-empty
 line after it is one option; consecutive lines and blank-line-separated options
 parse the same way, and with no blank line at all the text falls back to one
-item per line. Options are shown as `A.`, `B.`, … in the overlay. The model call
-is unchanged: `ins` = question, `crit` = the letter-labelled options.
+item per line. The model call is unchanged: `ins` = question, `crit` = the
+letter-labelled options.
 **Why:** Quizzes (Likert polls, MCQ exercises) are usually copied as one text
 block; demanding a separate `Tab` capture per option is error-prone. This also
 fits the v1 invariants: it is still native text, still a single-answer `choice`
 (ADR-8), and the clipboard is untouched (ADR-5).
-**Consequence:** Quiz mode is **all-or-nothing**: only the first capture of a
+**Consequence:** Parsing is **all-or-nothing**: only the first capture of a
 session is accepted, and a selection that does not split into a question plus at
 least one option is discarded with a status line. The question may wrap (it is
 the whole first block); each option is a single line, so a wrapped option is not
-supported. In quiz mode, `Enter` clears the captured question and answers
-(un-highlights them) as soon as the decision is sent, and `Tab` from the
-results captures the next selection directly, so a whole quiz can be worked
-through without extra keypresses; the app does not re-read or compare the
-PRIMARY buffer on `Tab`. The results are listed in captured option order
-(`A`, `B`, …) rather than by probability, so they line up with the quiz text,
-with the top answer still highlighted. Turning the setting off restores the
-per-item `Tab` capture
-(ADR-33). `Settings` gains `quiz_mode`; `layanow_core::parse_quiz` holds the pure
-split so the parsing rules are unit-tested without a window.
+supported. `Settings` gains `quiz_parse`; `layanow_core::parse_quiz` holds the
+pure split so the parsing rules are unit-tested without a window. The other quiz
+workflow behaviours are separate settings (ADR-45).
+
+## ADR-45 — Quiz behaviours are independent settings
+**Decision:** The quiz workflow is split into independent toggles, replacing the
+single `quiz_mode` (ADR-44):
+
+- `quiz_parse` — split a whole-quiz selection into question + options (ADR-44).
+- `quiz_option_letters` — draw the captured options as `A.`, `B.`, … instead of
+  `Answer 1:`.
+- `quiz_clear_on_enter` — clear the captured question and answers as soon as
+  `Enter` sends the decision (the question is kept for the results header).
+- `quiz_tab_next` — `Tab` while results are shown loads the next quiz, capturing
+  the current selection directly (Context is preserved).
+- `results_typed_order` (**global**, default **on**) — list results in captured
+  option order (`A`, `B`, …); off lists highest probability first.
+
+All default off except `results_typed_order`. A legacy `quiz_mode = true` is
+migrated to all four quiz toggles on load.
+**Why:** The behaviours are orthogonal — a user may want to parse a whole quiz
+but keep the results on screen, or use normal one-item capture with
+clear-on-Enter. One combined flag forced an all-or-nothing workflow and made
+later changes (the `Tab`/clear behaviour) unable to be tuned without affecting
+parsing. Each toggle is separately testable.
+**Consequence:** `Settings` replaces `quiz_mode` with the five fields; the
+settings window shows the quiz toggles as a group. `results_typed_order` applies
+to every mode, not just quiz mode. The parser and the overlay read only the
+toggle they need.
