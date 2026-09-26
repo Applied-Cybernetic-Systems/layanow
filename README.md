@@ -28,8 +28,9 @@ Linux/Wayland, working end to end:
 - **Local Laya** via ONNX Runtime, CPU-only, with a per-checkpoint **precision**
   (fp32/fp16, plus English int8 behind a lower-accuracy warning — ADR-39).
 - A standalone **settings window** (`layanow settings`) for checkpoint,
-  precision, low-confidence threshold, model residency, and probability-bar
-  colours; it writes `~/.config/layanow/config.toml` and applies live (ADR-38).
+  precision, low-confidence threshold, model residency, probability-bar colours,
+  context templates, the quiz options, and results order; it writes
+  `~/.config/layanow/config.toml` and applies live (ADR-38/40/45).
 - A **click-through** overlay that only grabs the keyboard while shown, with
   ranked results and probability colours (ADR-14/25/31).
 - Optional **quiz options** (ADR-44/45), each independent: parse a whole quiz

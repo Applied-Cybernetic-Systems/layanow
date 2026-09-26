@@ -25,7 +25,7 @@ Decisions live in `DECISIONS.md` as ADRs. This file tracks what is still open.
 | E1 | Git | `github.com/Applied-Cybernetic-Systems/layanow` (public) (ADR-22) |
 | E3 | Testing fixtures | **Commit generated golden fixtures** for the rendering/calibration port; replay offline (ADR-29) |
 | E4 | Logging | **`tracing` + `tracing-subscriber`**; `LAYANOW_LOG` (fallback `RUST_LOG`), default `warn`, `LAYANOW_DEBUG` shorthand |
-| E5 | Config | **TOML at `~/.config/layanow/config.toml`**: `checkpoint`, `confidence_threshold`, `unload` (hot/on-demand) in v1 (ADR-38) |
+| E5 | Config | **TOML at `~/.config/layanow/config.toml`**; keys grow with the settings window (checkpoint, quant, confidence threshold, unload, palette, contexts, quiz options, results order) — see `Settings` and ADR-38/40/45 |
 | E8 | MSRV/edition | **Rust 1.85 / edition 2024** (pinned in `Cargo.toml`/`rust-toolchain.toml`) |
 | E10 | Localization | UI is **English-only** (ADR-41) |
 | E9 | Telemetry | **None**; no analytics, crash reporting, or phone-home (ADR-42) |
