@@ -429,13 +429,10 @@ impl Overlay {
             Ok(()) => {
                 self.pending_request = Some(id);
                 if self.quiz_clear_on_enter {
-                    // Un-highlight the captured quiz once it has been sent — both
-                    // the overlay's items and the native PRIMARY selection, so
-                    // the source app drops its highlight (ADR-45/46).
+                    // Clear the overlay's captured items once the decision has
+                    // been sent. Clearing the native PRIMARY selection is not
+                    // wired up yet — it did not reliably un-highlight (#30).
                     self.session.clear();
-                    if let Err(error) = self.resolver.clear_current_selection() {
-                        tracing::warn!(%error, "could not clear the native selection");
-                    }
                 }
                 Phase::Running
             }
@@ -1165,8 +1162,8 @@ mod tests {
         overlay.decide();
         assert!(overlay.session.is_empty());
         assert_eq!(overlay.last_question.as_deref(), Some("Q1"));
-        // The native selection is cleared so the source app un-highlights.
-        assert_eq!(resolver.clears(), 1);
+        // The native PRIMARY clear is kept but not wired up yet (#30).
+        assert_eq!(resolver.clears(), 0);
     }
 
     #[test]

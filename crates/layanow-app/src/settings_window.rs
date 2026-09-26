@@ -115,9 +115,9 @@ impl SettingsApp {
         ui.small("Label the answers A, B, C… instead of “Answer 1”, “Answer 2”.");
         ui.checkbox(
             &mut self.settings.quiz_clear_on_enter,
-            "Clear the native highlight when a decision is made",
+            "Clear the captured highlight when a decision is made",
         );
-        ui.small("Deselect the text in the source app so the next question is easy to select.");
+        ui.small("Empty the captured items once a decision is sent.");
         ui.checkbox(&mut self.settings.quiz_tab_next, "Tab from the results loads the next quiz");
         ui.small("Start the next quiz from the results without a dismiss click.");
         ui.checkbox(

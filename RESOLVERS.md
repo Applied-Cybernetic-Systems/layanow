@@ -21,7 +21,7 @@ pub trait TextResolver: Send + Sync {
     /// Read the app's current native text selection, if any.
     fn resolve_current_selection(&self) -> Result<Option<Selection>, ResolveError>;
     /// Clear the native selection so the source app un-highlights it
-    /// (opt-in "clear on Enter", ADR-46). Default: no-op.
+    /// (kept but not currently called — deferred, ADR-46/#30). Default: no-op.
     fn clear_current_selection(&self) -> Result<(), ResolveError> { Ok(()) }
 }
 ```
@@ -36,9 +36,9 @@ receive drags (ADR-14).
 
 Resolvers must be side-effect free with respect to the **regular clipboard**
 (ADR-5): read the selection buffer; never overwrite the clipboard. The one
-opt-in exception is `clear_current_selection` (ADR-46), which clears the
-**PRIMARY** selection only so the source app drops its highlight; it is used by
-the disabled-by-default "clear on `Enter`" setting.
+reserved exception is `clear_current_selection` (ADR-46/#30), which clears the
+**PRIMARY** selection only so the source app drops its highlight. It is kept but
+not currently called — the native-unhighlight fix is deferred.
 
 ## The three platform backends
 
@@ -46,10 +46,10 @@ the disabled-by-default "clear on `Enter`" setting.
 - **Wayland:** read the PRIMARY selection via `wl-clipboard-rs` (`wl-paste -p`
   equivalent). The crate uses `ext-data-control` / `wlr-data-control` v2, which
   wlroots compositors provide. PRIMARY is separate from the clipboard,
-  so nothing is clobbered. Clearing PRIMARY (`copy::clear`, ADR-46) is used by
-  the opt-in "clear on `Enter`" setting. **Implemented.** If an app does not publish
-  PRIMARY, optionally fall back to a simulated copy (`wtype`) **with clipboard
-  save + restore** (opt-in).
+  so nothing is clobbered. **Implemented.** If an app does not publish PRIMARY,
+  optionally fall back to a simulated copy (`wtype`) **with clipboard save +
+  restore** (opt-in). Clearing PRIMARY (`copy::clear`, ADR-46) is kept for the
+  deferred native-unhighlight fix (#30) but not wired up.
 - **X11:** read the PRIMARY selection directly (`x11rb` / `x11-clipboard`).
   Not yet implemented.
 
