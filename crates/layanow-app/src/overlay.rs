@@ -73,9 +73,6 @@ pub struct Overlay {
     threshold: f32,
     /// Whether quiz mode parses a single whole-quiz selection (ADR-44).
     quiz_mode: bool,
-    /// Raw text of the most recently captured quiz, so quiz mode's `Tab`-next
-    /// can tell an unchanged selection from a new one (ADR-44).
-    last_quiz: Option<String>,
     /// Probability-bar colour anchors from settings.
     palette: Palette,
     /// A short user-facing hint (e.g. "no selection") drawn while capturing.
@@ -128,7 +125,6 @@ impl Overlay {
             phase: Phase::Capturing,
             threshold: DEFAULT_CONFIDENCE_THRESHOLD,
             quiz_mode: false,
-            last_quiz: None,
             palette: Palette::default(),
             status: None,
             entry: String::new(),
@@ -267,20 +263,13 @@ impl Overlay {
     }
 
     /// Split `text` into the quiz question and its options and store them.
-    /// Records the raw text so the same selection cannot be captured twice.
     fn store_quiz(&mut self, text: &str, source: Source) {
-        if self.last_quiz.as_deref() == Some(text) {
-            self.status =
-                Some("same selection as the last quiz — highlight the next one".to_string());
-            return;
-        }
         match layanow_core::parse_quiz(text) {
             Some((question, options)) => {
                 tracing::debug!(options = options.len(), "captured quiz");
                 for item in std::iter::once(question).chain(options) {
                     self.session.push(Selection { text: item, source, bounds: None });
                 }
-                self.last_quiz = Some(text.to_string());
                 self.status = None;
             }
             None => {
@@ -443,9 +432,9 @@ impl Overlay {
         }
     }
 
-    /// Clear the captured session and return to capturing, keeping the last
-    /// quiz so quiz mode's `Tab`-next can refuse an unchanged selection.
-    fn reset_session(&mut self) {
+    /// Clear everything and return to capturing, un-highlighting the captured
+    /// question and answers (`Esc`, a click on results, or quiz mode's `Tab`).
+    fn dismiss(&mut self) {
         self.phase = Phase::Capturing;
         self.pending_request = None;
         self.session.clear();
@@ -456,21 +445,11 @@ impl Overlay {
         self.selected_template = None;
     }
 
-    /// Clear everything and return to capturing (`Esc`, or a click on results).
-    fn dismiss(&mut self) {
-        self.reset_session();
-        self.last_quiz = None;
-    }
-
-    /// Quiz mode: from the results, `Tab` returns to the capture screen so the
-    /// next quiz can be selected and captured (ADR-44).
-    ///
-    /// It deliberately does not read or re-capture the current selection: the
-    /// PRIMARY buffer can lag the on-screen text, so the next quiz must be an
-    /// explicit selection. The last quiz is kept so capturing it again is
-    /// reported rather than silently re-run.
+    /// Quiz mode: from the results, `Tab` clears the capture (un-highlights it)
+    /// and returns to the capture screen, so the user can highlight the next
+    /// question themselves (ADR-44).
     fn next_quiz(&mut self) {
-        self.reset_session();
+        self.dismiss();
     }
 
     /// Show or hide the overlay, clearing the session on any change.
@@ -1087,7 +1066,7 @@ mod tests {
     }
 
     #[test]
-    fn quiz_mode_tab_next_resets_for_the_next_quiz() {
+    fn quiz_mode_tab_next_unhighlights_for_rehighlighting() {
         let (mut overlay, resolver) = overlay();
         overlay.set_quiz_mode(true);
         resolver.set("Q1\nA\nB");
@@ -1096,35 +1075,12 @@ mod tests {
         wait_for_reply(&mut overlay);
         assert!(matches!(overlay.phase, Phase::Results(_)));
 
-        // Tab from the results returns to the capture screen without capturing
-        // the (possibly stale) current selection.
+        // Tab from the results clears the capture, ready to be highlighted again.
         overlay.next_quiz();
         assert!(matches!(overlay.phase, Phase::Capturing));
         assert!(overlay.session.is_empty());
 
-        // Re-capturing the same selection is refused.
-        overlay.capture_item();
-        assert!(overlay.session.is_empty());
-        assert!(overlay.status.is_some());
-
-        // A different selection is captured.
-        resolver.set("Q2\nC\nD");
-        overlay.capture_item();
-        assert_eq!(overlay.session.question_text(), Some("Q2"));
-        assert_eq!(overlay.session.answer_texts(), ["C", "D"]);
-    }
-
-    #[test]
-    fn a_manual_dismiss_allows_recapturing_the_same_quiz() {
-        let (mut overlay, resolver) = overlay();
-        overlay.set_quiz_mode(true);
-        resolver.set("Q1\nA\nB");
-        overlay.capture_item();
-        overlay.decide();
-        wait_for_reply(&mut overlay);
-
-        // A dismiss click/Esc clears the last quiz, so it may be captured again.
-        overlay.dismiss();
+        // The question may be highlighted and captured again (even unchanged).
         overlay.capture_item();
         assert_eq!(overlay.session.question_text(), Some("Q1"));
         assert_eq!(overlay.session.answer_texts(), ["A", "B"]);

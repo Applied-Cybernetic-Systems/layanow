@@ -603,13 +603,12 @@ fits the v1 invariants: it is still native text, still a single-answer `choice`
 session is accepted, and a selection that does not split into a question plus at
 least one option is discarded with a status line. The question may wrap (it is
 the whole first block); each option is a single line, so a wrapped option is not
-supported. From the results, `Tab` returns to the capture screen so the next
-quiz can be selected explicitly; it deliberately does not re-read the PRIMARY
-buffer, which can lag the on-screen text. Capturing the same selection again is
-refused with a status line, while a dismiss click/`Esc` forgets the last quiz so
-it can be re-run. The results are listed in captured option order (`A`, `B`, …)
-rather than by probability, so they line up with the quiz text, with the top
-answer still highlighted. Turning the setting off restores the per-item `Tab`
-capture
+supported. From the results, `Tab` clears the captured question and answers
+(un-highlights them) and returns to the capture screen, so the user can
+highlight the next question themselves; the app does not re-read or compare the
+PRIMARY buffer, which can lag the on-screen text. The results are listed in
+captured option order (`A`, `B`, …) rather than by probability, so they line up
+with the quiz text, with the top answer still highlighted. Turning the setting
+off restores the per-item `Tab` capture
 (ADR-33). `Settings` gains `quiz_mode`; `layanow_core::parse_quiz` holds the pure
 split so the parsing rules are unit-tested without a window.
