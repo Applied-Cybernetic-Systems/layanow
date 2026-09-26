@@ -434,6 +434,13 @@ impl Overlay {
         self.selected_template = None;
     }
 
+    /// Quiz mode: from the results, start the next quiz in one step — dismiss
+    /// the current results and capture the next selection (ADR-44).
+    fn next_quiz(&mut self) {
+        self.dismiss();
+        self.capture_item();
+    }
+
     /// Show or hide the overlay, clearing the session on any change.
     ///
     /// A hidden applet must not retain captured text, and each showing starts
@@ -625,12 +632,12 @@ impl Overlay {
                             }
                             Self::draw_results(ui, panel);
                             ui.add_space(8.0);
-                            theme::shadowed_text(
-                                ui,
-                                "click: dismiss · Esc: hide",
-                                theme::FG4,
-                                theme::BODY_SIZE,
-                            );
+                            let hint = if self.quiz_mode {
+                                "Tab: next quiz · click: dismiss · Esc: hide"
+                            } else {
+                                "click: dismiss · Esc: hide"
+                            };
+                            theme::shadowed_text(ui, hint, theme::FG4, theme::BODY_SIZE);
                         });
                     });
                 }
@@ -682,6 +689,14 @@ impl OverlayApp for Overlay {
             if ctx.input(|input| input.key_pressed(egui::Key::Enter)) {
                 self.decide();
             }
+        }
+        // Quiz mode: from the results, `Tab` starts the next quiz in one press,
+        // so a whole quiz can be worked through without a dismiss click.
+        if self.quiz_mode
+            && matches!(self.phase, Phase::Results(_))
+            && ctx.input_mut(|input| input.consume_key(egui::Modifiers::NONE, egui::Key::Tab))
+        {
+            self.next_quiz();
         }
         if ctx.input(|input| input.key_pressed(egui::Key::Escape)) {
             // The applet is resident: `Esc` hides the overlay instead of
@@ -1037,6 +1052,24 @@ mod tests {
         resolver.set("C");
         overlay.capture_item();
         assert_eq!(overlay.session.answer_texts(), ["A", "B"]);
+    }
+
+    #[test]
+    fn quiz_mode_starts_the_next_quiz_from_the_results() {
+        let (mut overlay, resolver) = overlay();
+        overlay.set_quiz_mode(true);
+        resolver.set("Q1\nA\nB");
+        overlay.capture_item();
+        overlay.decide();
+        wait_for_reply(&mut overlay);
+        assert!(matches!(overlay.phase, Phase::Results(_)));
+
+        // Pressing Tab from the results dismisses and captures the next quiz.
+        resolver.set("Q2\nC\nD");
+        overlay.next_quiz();
+        assert!(matches!(overlay.phase, Phase::Capturing));
+        assert_eq!(overlay.session.question_text(), Some("Q2"));
+        assert_eq!(overlay.session.answer_texts(), ["C", "D"]);
     }
 
     #[test]

@@ -603,6 +603,8 @@ fits the v1 invariants: it is still native text, still a single-answer `choice`
 session is accepted, and a selection that does not split into a question plus at
 least one option is discarded with a status line. The question may wrap (it is
 the whole first block); each option is a single line, so a wrapped option is not
-supported. Turning the setting off restores the per-item `Tab` capture
+supported. From the results, `Tab` dismisses the current decision and captures
+the next quiz in a single press, so a whole quiz can be worked through without a
+dismiss click. Turning the setting off restores the per-item `Tab` capture
 (ADR-33). `Settings` gains `quiz_mode`; `layanow_core::parse_quiz` holds the pure
 split so the parsing rules are unit-tested without a window.

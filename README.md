@@ -46,7 +46,7 @@ cargo run -p layanow-app            # resident applet; overlay starts hidden
 cargo run -p layanow-app -- toggle  # show/hide · also: show, hide, quit
 cargo run -p layanow-app -- settings  # open the settings window
 # highlight text (or type), Tab to add · Enter to decide · Esc: hide
-# quiz mode: highlight the whole quiz once, then Enter
+# quiz mode: highlight the whole quiz once, then Enter · Tab: next quiz
 # optional: put evidence in the Context box (type/paste, Files… picker, file-manager selection, or a saved template)
 ```
 
